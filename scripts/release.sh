@@ -20,7 +20,13 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-APP_PATH="${APP_PATH:-$HOME/Desktop/textmate-whisper-build/TextMate.app}"
+if [[ -z "${APP_PATH:-}" ]]; then
+  if [[ -d "$HOME/Desktop/textmate-whisper-build/TextMate-Whisper.app" ]]; then
+    APP_PATH="$HOME/Desktop/textmate-whisper-build/TextMate-Whisper.app"
+  else
+    APP_PATH="$HOME/Desktop/textmate-whisper-build/TextMate.app"
+  fi
+fi
 REPO="${REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null || true)}"
 TAG="${TAG:-v0.2.0}"
 TITLE="${TITLE:-$TAG}"

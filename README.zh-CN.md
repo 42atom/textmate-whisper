@@ -166,22 +166,24 @@ TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and
 
 ## 发布（已编译 App）
 
-将可下载的 `TextMate.app` 推送到 GitHub Release：
+将可下载的 `TextMate-Whisper.app` 推送到 GitHub Release：
 
 ```bash
 chmod +x ./scripts/release.sh
-TAG=v0.2.0 ./scripts/release.sh
+TAG=v0.2.1 ./scripts/release.sh
 ```
 
 默认行为：
-- 读取 App 路径：`~/Desktop/textmate-whisper-build/TextMate.app`
+- 自动读取 App 路径（优先顺序）：
+  - `~/Desktop/textmate-whisper-build/TextMate-Whisper.app`（优先）
+  - 回退：`~/Desktop/textmate-whisper-build/TextMate.app`
 - 生成压缩包：`dist/TextMate-whisper-macos-universal-<tag>.zip`
 - 同时上传 `SHA256` 校验文件。
 
 如需覆盖仓库或 App 路径：
 
 ```bash
-REPO=owner/repo APP_PATH=/path/to/TextMate.app TAG=v0.2.0 ./scripts/release.sh
+REPO=owner/repo APP_PATH=/path/to/TextMate-Whisper.app TAG=v0.2.1 ./scripts/release.sh
 ```
 
 ## 许可证

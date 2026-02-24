@@ -2,3 +2,4 @@
 *.bak-*
 *.wav
 *.log
+dist/

@@ -1,13 +1,13 @@
 ---
 id: 0004
 title: 发布可下载编译产物到 GitHub Release
-status: doing
+status: done
 owner: agent
 labels: [chore, docs, release]
 risk: medium
 scope: 仓库远端初始化、release 打包脚本、GitHub Release 资产上传
 plan_doc: docs/design/plan-260224-github-release-artifact.md
-links: []
+links: [https://github.com/42atom/textmate-whisper/releases/tag/v0.2.0, https://github.com/42atom/textmate-whisper/releases/tag/v0.2.1]
 ---
 
 ## Context
@@ -26,9 +26,9 @@ links: []
 ## Plan
 - [x] 新增 `scripts/release.sh` 实现打包 + 发布逻辑。
 - [x] 更新中英文 README 发布说明。
-- [ ] 创建 GitHub 远端并推送主分支。
-- [ ] 创建 release 标签并上传构建产物。
-- [ ] 回填 issue 证据并标记 done。
+- [x] 创建 GitHub 远端并推送主分支。
+- [x] 创建 release 标签并上传构建产物。
+- [x] 回填 issue 证据并标记 done。
 
 ## Acceptance Criteria
 - `scripts/release.sh` 可执行并通过语法检查。
@@ -36,7 +36,14 @@ links: []
 - Release 页面可下载 zip 和 sha256。
 
 ## Notes
-- 待发布后补充命令输出与 release 链接。
+- Evidence
+  - Tests：`./scripts/smoke.sh` -> `[OK] Static checks passed.` + `[OK] Runtime dry-run passed.`
+  - Logs：
+    - `gh repo create 42atom/textmate-whisper --public --source=. --remote=origin --push` 成功
+    - `TAG=v0.2.0 REPO=42atom/textmate-whisper NOTES_FILE=docs/release-notes/v0.2.0.md ./scripts/release.sh` 成功
+  - Links：
+    - Release: `https://github.com/42atom/textmate-whisper/releases/tag/v0.2.0`
+    - Release: `https://github.com/42atom/textmate-whisper/releases/tag/v0.2.1`
 
 ## Links
 - `scripts/release.sh`

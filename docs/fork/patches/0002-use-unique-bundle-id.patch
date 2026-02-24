@@ -1,0 +1,13 @@
+diff --git a/Applications/TextMate/Info.plist b/Applications/TextMate/Info.plist
+index 087a394..55f4fe9 100644
+--- a/Applications/TextMate/Info.plist
++++ b/Applications/TextMate/Info.plist
+@@ -11,7 +11,7 @@
+ 	<key>CFBundleVersion</key>
+ 	<string>9800</string>
+ 	<key>CFBundleIdentifier</key>
+-	<string>com.macromates.${TARGET_NAME}</string>
++	<string>com.textmatewhisper.${TARGET_NAME}</string>
+ 	<key>CFBundleDevelopmentRegion</key>
+ 	<string>English</string>
+ 	<key>CFBundleExecutable</key>

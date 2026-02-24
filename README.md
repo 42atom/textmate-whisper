@@ -170,22 +170,24 @@ Run static checks:
 
 ## Release (Compiled App)
 
-To publish a downloadable compiled `TextMate.app` to GitHub Release:
+To publish a downloadable compiled `TextMate-Whisper.app` to GitHub Release:
 
 ```bash
 chmod +x ./scripts/release.sh
-TAG=v0.2.0 ./scripts/release.sh
+TAG=v0.2.1 ./scripts/release.sh
 ```
 
 Defaults:
-- App input path: `~/Desktop/textmate-whisper-build/TextMate.app`
+- App input path (auto-detected):
+  - `~/Desktop/textmate-whisper-build/TextMate-Whisper.app` (preferred)
+  - fallback: `~/Desktop/textmate-whisper-build/TextMate.app`
 - Artifact output: `dist/TextMate-whisper-macos-universal-<tag>.zip`
 - Also uploads SHA256 checksum file.
 
 Override repo / app path if needed:
 
 ```bash
-REPO=owner/repo APP_PATH=/path/to/TextMate.app TAG=v0.2.0 ./scripts/release.sh
+REPO=owner/repo APP_PATH=/path/to/TextMate-Whisper.app TAG=v0.2.1 ./scripts/release.sh
 ```
 
 ## License

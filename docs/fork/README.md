@@ -8,6 +8,7 @@
 ## What Is Included
 - Patch template:
   - `docs/fork/patches/0001-add-nsmicrophoneusagedescription.patch`
+  - `docs/fork/patches/0002-use-unique-bundle-id.patch`
 - Build script skeleton:
   - `docs/fork/scripts/build_textmate_whisper_app.sh`
 
@@ -19,5 +20,6 @@
 
 ## Notes
 - This is an MVP path: app-level permission only.
+- Bundle identifier is intentionally changed to `com.textmatewhisper.TextMate` to avoid collision with official `/Applications/TextMate.app`.
 - Keep plugin repo (`textmate-whisper`) independent from app fork.
 - For legal distribution, follow GPL obligations when shipping binaries.
