@@ -8,8 +8,10 @@ safe_source_tm_bash_init
 
 CONFIG_FILE="${TM_WHISPER_CONFIG_FILE:-$HOME/.config/textmate-whisper/config.env}"
 mkdir -p "$(dirname "$CONFIG_FILE")"
-DEVICE_MAP_BEGIN="# BEGIN_TM_WHISPER_DEVICE_MAP"
-DEVICE_MAP_END="# END_TM_WHISPER_DEVICE_MAP"
+DEVICE_MAP_BEGIN="# @tmw:dm:begin"
+DEVICE_MAP_END="# @tmw:dm:end"
+LEGACY_DEVICE_MAP_BEGIN="# BEGIN_TM_WHISPER_DEVICE_MAP"
+LEGACY_DEVICE_MAP_END="# END_TM_WHISPER_DEVICE_MAP"
 
 open_in_textmate() {
   local file="$1"
@@ -53,8 +55,11 @@ TM_VOICE_SHOW_STATUS=1
 # TM_WHISPER_STATE_DIR=$HOME/.cache/textmate-whisper
 # TM_WHISPER_LOG_DIR=$HOME/.cache/textmate-whisper/logs
 
-# 后处理开关：none | openai
-TM_VOICE_POSTPROCESS=openai
+# 后处理开关：off | auto | openai
+# off: 关闭后处理
+# auto: 配置了 API key 才启用后处理（推荐）
+# openai: 强制走后处理（API 失败会回退原始转写）
+TM_VOICE_POSTPROCESS=auto
 
 # OpenAI 兼容 API（任选其一服务填写）
 # DeepSeek 示例：
@@ -110,21 +115,44 @@ generate_device_map_block() {
 }
 
 refresh_device_map_block() {
-  local tmp_file
+  local tmp_file block_file
   tmp_file="$(mktemp /tmp/tm-whisper-config-XXXXXX)"
+  block_file="$(mktemp /tmp/tm-whisper-device-map-XXXXXX)"
 
-  awk -v begin="$DEVICE_MAP_BEGIN" -v end="$DEVICE_MAP_END" '
-    $0 == begin { in_block = 1; next }
-    $0 == end { in_block = 0; next }
-    !in_block { print }
+  generate_device_map_block > "$block_file"
+
+  awk -v begin="$DEVICE_MAP_BEGIN" \
+      -v end="$DEVICE_MAP_END" \
+      -v legacy_begin="$LEGACY_DEVICE_MAP_BEGIN" \
+      -v legacy_end="$LEGACY_DEVICE_MAP_END" \
+      -v block_file="$block_file" '
+    function print_block(  line) {
+      while ((getline line < block_file) > 0) {
+        print line
+      }
+      close(block_file)
+    }
+
+    $0 == begin || $0 == legacy_begin { in_block = 1; next }
+    $0 == end || $0 == legacy_end { in_block = 0; next }
+    in_block { next }
+
+    !inserted && $0 ~ /^[[:space:]]*TM_WHISPER_INPUT_DEVICE=/ {
+      print_block()
+      inserted = 1
+    }
+
+    { print }
+
+    END {
+      if (!inserted) {
+        print_block()
+      }
+    }
   ' "$CONFIG_FILE" > "$tmp_file"
 
-  {
-    echo
-    generate_device_map_block
-  } >> "$tmp_file"
-
   mv "$tmp_file" "$CONFIG_FILE"
+  rm -f "$block_file"
 }
 
 created=0

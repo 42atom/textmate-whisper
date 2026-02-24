@@ -55,12 +55,13 @@ TM_OAI_BASE_URL=https://api.openai.com/v1
 TM_OAI_API_KEY=sk-...
 TM_OAI_MODEL=gpt-4o-mini
 TM_OAI_TIMEOUT_SEC=45
-TM_VOICE_POSTPROCESS=openai
+TM_VOICE_POSTPROCESS=auto
 ```
 
 Notes:
+- `TM_VOICE_POSTPROCESS=auto`: only enable post-edit when API key is configured.
+- `TM_VOICE_POSTPROCESS=off`: disable post-edit.
 - If API is unavailable, pipeline falls back to raw whisper transcript.
-- `Voice Dictation - Insert + AI Prompt...` enables post-edit for that run.
 
 ## 6) Reload TextMate bundles
 
@@ -68,10 +69,10 @@ Notes:
 
 If changes still do not take effect, restart TextMate.
 
-## 7) Start/Stop recording hotkeys
+## 7) Recording hotkeys
 
-- Start recording: `Option+Command+F1`
-- Stop and insert: `Shift+Option+Command+F1`
+- Toggle start/stop: `Option+Command+F1` (primary)
+- Force stop and insert: `Option+Command+F2` (fallback)
 - When enabled (`TM_VOICE_SHOW_STATUS=1`), window title shows `🔴 REC=<device>` while recording.
 
 ## 8) Debug logs

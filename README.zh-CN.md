@@ -16,13 +16,10 @@
 
 - 本地 Whisper-MLX 转写（命令：`mlx_whisper`）
 - 录音状态指示（窗口标题前缀 `🔴 REC=<设备名>` / `🟡 AI...` + macOS 通知）
-- 八条命令 + 快捷键
-  - `Voice Dictation - Start Recording`（`Option+Command+F1`）
-  - `Voice Dictation - Stop Recording + Insert`（`Shift+Option+Command+F1`）
-  - `Voice Dictation - Insert`（`Option+Command+D`）
-  - `Voice Dictation - Replace Selection`（`Shift+Option+Command+D`）
+- 五条命令 + 快捷键
+  - `Voice Dictation - Toggle Recording`（`Option+Command+F1`，主快捷键）
+  - `Voice Dictation - Stop Recording`（`Option+Command+F2`，可选兜底）
   - `Voice Dictation - Preview Draft`（`Control+Option+Command+D`）
-  - `Voice Dictation - Insert + AI Prompt...`（`Option+Command+G`）
   - `Whisper Voice - Settings...`（菜单命令）
   - `Whisper Voice - Local Model Setup Guide`（菜单命令）
 - 可选 OpenAI 兼容后修饰
@@ -111,22 +108,22 @@ TM_OAI_API_KEY=sk-...
 TM_OAI_MODEL=gpt-4o-mini
 TM_OAI_TIMEOUT_SEC=45
 
+TM_VOICE_POSTPROCESS=auto
+# off|none: 关闭后处理
+# auto: 仅当配置了 API key 时启用
+# openai: 强制走后处理（API 失败会回退原始转写）
+
 TM_VOICE_POST_PROMPT=Polish this transcript into concise writing.
 TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and readability while preserving meaning. Return only the rewritten text.
 ```
 
-开启后修饰需要：
-
-```bash
-TM_VOICE_POSTPROCESS=openai
-```
-
-其中 `Voice Dictation - Insert + AI Prompt...` 会自动开启并弹出指令输入框。
+可通过 `TM_VOICE_POSTPROCESS=off` 强制关闭后处理。
 
 ### 开始/结束录音流程
 
-- 按 `Option+Command+F1` 开始录音
-- 按 `Shift+Option+Command+F1` 结束录音并插入文本
+- 按 `Option+Command+F1` 开关录音（开始/结束）
+- 可选兜底：按 `Option+Command+F2` 强制结束并写入文本
+- 有选区时会替换选区，无选区时会在光标处插入
 - 当 `TM_VOICE_SHOW_STATUS=1` 时，录音/转写中会显示窗口标题前缀 `🔴 REC=<设备名>` / `🟡 AI...`
 
 ## 实现说明
@@ -166,6 +163,26 @@ TM_VOICE_POSTPROCESS=openai
 ```
 
 `smoke.sh` 包含语法检查与 `voice_input.sh --dry-run` 逻辑路径校验。
+
+## 发布（已编译 App）
+
+将可下载的 `TextMate.app` 推送到 GitHub Release：
+
+```bash
+chmod +x ./scripts/release.sh
+TAG=v0.2.0 ./scripts/release.sh
+```
+
+默认行为：
+- 读取 App 路径：`~/Desktop/textmate-whisper-build/TextMate.app`
+- 生成压缩包：`dist/TextMate-whisper-macos-universal-<tag>.zip`
+- 同时上传 `SHA256` 校验文件。
+
+如需覆盖仓库或 App 路径：
+
+```bash
+REPO=owner/repo APP_PATH=/path/to/TextMate.app TAG=v0.2.0 ./scripts/release.sh
+```
 
 ## 许可证
 

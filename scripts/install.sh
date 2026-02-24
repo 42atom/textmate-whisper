@@ -41,12 +41,10 @@ done
 cat <<MSG
 [OK] Installed TextMate bundle: $TARGET_BUNDLE
 [OK] Commands:
-  - Voice Dictation - Start Recording         (Option+Command+F1)
-  - Voice Dictation - Stop Recording + Insert (Shift+Option+Command+F1)
-  - Voice Dictation - Insert                  (Option+Command+D)
-  - Voice Dictation - Replace Selection       (Shift+Option+Command+D)
+  - Voice Dictation - Toggle Recording        (Option+Command+F1)
+  - Voice Dictation - Stop Recording          (Option+Command+F2, optional fallback)
   - Voice Dictation - Preview Draft           (Control+Option+Command+D)
-  - Voice Dictation - Insert + AI Prompt...   (Option+Command+G)
+  - Whisper Voice - Request Microphone Permission
   - Whisper Voice - Settings...               (menu command)
   - Whisper Voice - Local Model Setup Guide   (menu command)
 

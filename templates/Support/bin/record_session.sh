@@ -188,6 +188,20 @@ audio_duration_seconds() {
   printf '0\n'
 }
 
+audio_max_volume_db() {
+  local file="$1"
+  local max_db
+
+  if [[ -z "${FFMPEG_BIN:-}" ]]; then
+    printf '\n'
+    return 0
+  fi
+
+  max_db="$("$FFMPEG_BIN" -nostdin -hide_banner -i "$file" -af volumedetect -f null - 2>&1 \
+    | awk -F': ' '/max_volume/ { gsub(/ dB/, "", $2); print $2; exit }')"
+  printf '%s\n' "$max_db"
+}
+
 wait_for_file_stable() {
   local file="$1"
   local max_tries="${2:-30}"
@@ -217,6 +231,7 @@ load_config_env "${TM_WHISPER_CONFIG_FILE:-$HOME/.config/textmate-whisper/config
   TM_FFPROBE_BIN \
   TM_WHISPER_INPUT_DEVICE \
   TM_VOICE_SHOW_STATUS \
+  TM_WHISPER_SILENCE_DB \
   TM_WHISPER_STATE_DIR \
   TM_WHISPER_LOG_DIR
 
@@ -230,6 +245,7 @@ FFMPEG_BIN_RAW="${TM_FFMPEG_BIN:-ffmpeg}"
 FFMPEG_BIN="$(resolve_bin "$FFMPEG_BIN_RAW" || true)"
 WHISPER_INPUT_DEVICE="${TM_WHISPER_INPUT_DEVICE:-auto}"
 TM_VOICE_SHOW_STATUS="${TM_VOICE_SHOW_STATUS:-1}"
+TM_WHISPER_SILENCE_DB="${TM_WHISPER_SILENCE_DB:--80}"
 STATE_ROOT="${TM_WHISPER_STATE_DIR:-$HOME/.cache/textmate-whisper}"
 STATE_FILE="${STATE_ROOT}/active_session.env"
 VOICE_INPUT_SCRIPT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/voice_input.sh"
@@ -242,12 +258,12 @@ if [[ ! -x "$VOICE_INPUT_SCRIPT" ]]; then
   show_tip_and_exit "voice_input.sh not found or not executable."
 fi
 
-if [[ ! "$MODE" =~ ^(insert|replace|preview)$ ]]; then
+if [[ ! "$MODE" =~ ^(insert|replace|preview|auto)$ ]]; then
   show_tip_and_exit "Unsupported mode: $MODE"
 fi
 
 if [[ "$ACTION" != "start" && "$ACTION" != "stop" && "$ACTION" != "toggle" && "$ACTION" != "status" ]]; then
-  show_tip_and_exit "Usage: record_session.sh --action start|stop|toggle|status [--mode insert|replace|preview]"
+  show_tip_and_exit "Usage: record_session.sh --action start|stop|toggle|status [--mode insert|replace|preview|auto]"
 fi
 
 state_file_is_active() {
@@ -279,7 +295,7 @@ build_status_message() {
   local pid audio_file saved_mode start_epoch_saved elapsed_now audio_size
 
   if ! state_file_is_active; then
-    printf 'Recording: OFF | Start: Option+Command+F1 | Stop: Shift+Option+Command+F1\n'
+    printf 'Recording: OFF | Toggle: Option+Command+F1 | Force stop: Option+Command+F2\n'
     return 0
   fi
 
@@ -296,8 +312,8 @@ build_status_message() {
     audio_size="$(stat -f '%z' "$audio_file" 2>/dev/null || echo 0)"
   fi
 
-  printf 'Recording: ON | pid=%s | mode=%s | elapsed=%s | bytes=%s | Stop: Shift+Option+Command+F1\n' \
-    "${pid:-unknown}" "${saved_mode:-insert}" "$elapsed_now" "$audio_size"
+  printf 'Recording: ON | pid=%s | mode=%s | elapsed=%s | bytes=%s | Stop: Option+Command+F1 (or Option+Command+F2)\n' \
+    "${pid:-unknown}" "${saved_mode:-auto}" "$elapsed_now" "$audio_size"
 }
 
 start_recording() {
@@ -308,7 +324,7 @@ start_recording() {
   fi
 
   if state_file_is_active; then
-    show_tip_and_exit "Recording already running. Press Shift+Option+Command+F1 to stop."
+    show_tip_and_exit "Recording already running. Press Option+Command+F1 to stop (or Option+Command+F2)."
   fi
 
   if [[ -f "$STATE_FILE" ]]; then
@@ -370,8 +386,12 @@ EOF
   append_log "INFO" "recording started pid=$ffmpeg_pid device=$WHISPER_INPUT_DEVICE audio_file=$audio_file ffmpeg_log=$log_file"
   recording_marker="$(build_recording_marker "$WHISPER_INPUT_DEVICE")"
   set_window_indicator "$recording_marker" "$window_id" "$window_title_base"
-  status_notify "Recording" "Started. Press Shift+Option+Command+F1 to stop."
-  show_tip_and_exit "Recording started. Press Shift+Option+Command+F1 to stop." 0
+  status_notify "Recording" "Started. Press Option+Command+F1 to stop."
+  # Toggle command uses replaceInput output; emit selected text back so start action does not alter selection content.
+  if [[ -n "${TM_SELECTED_TEXT:-}" ]]; then
+    printf '%s' "$TM_SELECTED_TEXT"
+  fi
+  show_tip_and_exit "Recording started. Press Option+Command+F1 to stop." 0
 }
 
 stop_recording() {
@@ -395,7 +415,7 @@ stop_recording() {
     show_tip_and_exit "Recording state is broken. Please start recording again."
   fi
 
-  if [[ "$saved_mode" =~ ^(insert|replace|preview)$ ]]; then
+  if [[ "$saved_mode" =~ ^(insert|replace|preview|auto)$ ]]; then
     MODE="$saved_mode"
   fi
 
@@ -438,12 +458,13 @@ stop_recording() {
   wait_for_file_stable "$audio_file" 30 0.10
   audio_size="$(stat -f '%z' "$audio_file" 2>/dev/null || echo 0)"
   audio_dur="$(audio_duration_seconds "$audio_file")"
+  audio_max_db="$(audio_max_volume_db "$audio_file")"
   stop_epoch="$(date +%s)"
   elapsed="unknown"
   if [[ -n "${start_epoch_saved:-}" && "$start_epoch_saved" =~ ^[0-9]+$ ]]; then
     elapsed="$((stop_epoch - start_epoch_saved))s"
   fi
-  append_log "INFO" "stop metrics pid_alive=${pid_was_alive} size=${audio_size} duration=${audio_dur}s elapsed=${elapsed} file=$audio_file"
+  append_log "INFO" "stop metrics pid_alive=${pid_was_alive} size=${audio_size} duration=${audio_dur}s max_db=${audio_max_db:-unknown} elapsed=${elapsed} file=$audio_file"
 
   if [[ "$audio_size" -lt 2048 ]]; then
     rm -rf "$session_dir"
@@ -457,6 +478,10 @@ stop_recording() {
 
   if [[ ! -s "$audio_file" ]]; then
     show_tip_and_exit "Recording file is empty. Please try again."
+  fi
+
+  if [[ -n "${audio_max_db:-}" ]] && awk -v v="$audio_max_db" -v t="$TM_WHISPER_SILENCE_DB" 'BEGIN { exit !(v <= t) }'; then
+    show_tip_and_exit "Recorded audio is silent (max ${audio_max_db} dB). Run 'Whisper Voice - Request Microphone Permission', then verify TM_WHISPER_INPUT_DEVICE (e.g. AirPods :1). Debug audio kept at: $audio_file"
   fi
 
   set_window_indicator "🟡 AI... |" "$window_id" "$window_title_base"

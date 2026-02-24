@@ -17,13 +17,10 @@ TextMate is lightweight and fast, but it has no built-in speech-to-text workflow
 
 - Local transcription via `mlx_whisper` (default)
 - Recording status indicator (window title prefix `🔴 REC=<device>` / `🟡 AI...` + macOS notifications)
-- Eight commands with keyboard shortcuts
-  - `Voice Dictation - Start Recording` (`Option+Command+F1`)
-  - `Voice Dictation - Stop Recording + Insert` (`Shift+Option+Command+F1`)
-  - `Voice Dictation - Insert` (`Option+Command+D`)
-  - `Voice Dictation - Replace Selection` (`Shift+Option+Command+D`)
+- Five commands with keyboard shortcuts
+  - `Voice Dictation - Toggle Recording` (`Option+Command+F1`, primary)
+  - `Voice Dictation - Stop Recording` (`Option+Command+F2`, optional fallback)
   - `Voice Dictation - Preview Draft` (`Control+Option+Command+D`)
-  - `Voice Dictation - Insert + AI Prompt...` (`Option+Command+G`)
   - `Whisper Voice - Settings...` (menu command)
   - `Whisper Voice - Local Model Setup Guide` (menu command)
 - Optional OpenAI-compatible post-editing pipeline
@@ -113,22 +110,22 @@ TM_OAI_API_KEY=sk-...
 TM_OAI_MODEL=gpt-4o-mini
 TM_OAI_TIMEOUT_SEC=45
 
+TM_VOICE_POSTPROCESS=auto
+# off|none: disable post-edit
+# auto: enable only when API key is set
+# openai: force post-edit path (falls back to raw text if API fails)
+
 TM_VOICE_POST_PROMPT=Polish this transcript into concise writing.
 TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and readability while preserving meaning. Return only the rewritten text.
 ```
 
-To enable post-editing for a command run, the command sets:
-
-```bash
-TM_VOICE_POSTPROCESS=openai
-```
-
-`Voice Dictation - Insert + AI Prompt...` sets this automatically and asks for an instruction.
+`TM_VOICE_POSTPROCESS=off` can force-disable post-edit even when key is configured.
 
 ### Start/Stop Recording Flow
 
-- Press `Option+Command+F1` to start recording
-- Press `Shift+Option+Command+F1` to stop and insert transcript
+- Press `Option+Command+F1` to toggle recording (start/stop)
+- Optional fallback: `Option+Command+F2` to force stop and write transcript
+- If selection exists, output replaces selection; otherwise it inserts at caret
 - During recording/transcribing, window title shows `🔴 REC=<device>` / `🟡 AI...` when `TM_VOICE_SHOW_STATUS=1`
 
 ## Design Notes
@@ -170,6 +167,26 @@ Run static checks:
 ```
 
 `smoke.sh` includes syntax checks and `voice_input.sh --dry-run` runtime-path validation.
+
+## Release (Compiled App)
+
+To publish a downloadable compiled `TextMate.app` to GitHub Release:
+
+```bash
+chmod +x ./scripts/release.sh
+TAG=v0.2.0 ./scripts/release.sh
+```
+
+Defaults:
+- App input path: `~/Desktop/textmate-whisper-build/TextMate.app`
+- Artifact output: `dist/TextMate-whisper-macos-universal-<tag>.zip`
+- Also uploads SHA256 checksum file.
+
+Override repo / app path if needed:
+
+```bash
+REPO=owner/repo APP_PATH=/path/to/TextMate.app TAG=v0.2.0 ./scripts/release.sh
+```
 
 ## License
 

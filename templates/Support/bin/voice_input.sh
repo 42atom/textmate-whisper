@@ -165,13 +165,13 @@ WHISPER_LANG="${TM_WHISPER_LANG:-zh}"
 WHISPER_TASK="${TM_WHISPER_TASK:-transcribe}"
 WHISPER_MAX_SEC="${TM_WHISPER_MAX_SEC:-20}"
 WHISPER_INPUT_DEVICE="${TM_WHISPER_INPUT_DEVICE:-auto}"
-POSTPROCESS_MODE="${TM_VOICE_POSTPROCESS:-none}"
+POSTPROCESS_MODE="$(printf '%s' "${TM_VOICE_POSTPROCESS:-auto}" | tr '[:upper:]' '[:lower:]')"
 TM_VOICE_SHOW_STATUS="${TM_VOICE_SHOW_STATUS:-1}"
 
 append_log "INFO" "start mode=$MODE audio_file_input=${AUDIO_FILE_INPUT:-<none>} model=${WHISPER_MODEL} postprocess=${POSTPROCESS_MODE}"
 append_log "INFO" "bin ffmpeg=${FFMPEG_BIN:-<missing>} whisper=${WHISPER_BIN:-<missing>}"
 
-if [[ ! "$MODE" =~ ^(insert|replace|preview)$ ]]; then
+if [[ ! "$MODE" =~ ^(insert|replace|preview|auto)$ ]]; then
   show_tip_and_exit "Unsupported mode: $MODE"
 fi
 
@@ -293,19 +293,45 @@ if [[ ! -s "$RAW_TXT" ]]; then
   show_tip_and_exit "Transcript is empty. Try longer recording (TM_WHISPER_MAX_SEC=30)."
 fi
 
+POSTPROCESS_ENABLED=0
 case "$POSTPROCESS_MODE" in
+  off|none|0|false|no)
+    POSTPROCESS_ENABLED=0
+    ;;
   openai|openai-compatible|1|true|yes)
-    status_notify "Polishing" "Applying OpenAI-compatible post-edit..."
-    if ! postprocess_openai "$RAW_TXT" "$FINAL_TXT"; then
-      cp "$RAW_TXT" "$FINAL_TXT"
+    POSTPROCESS_ENABLED=1
+    ;;
+  auto|"")
+    if [[ -n "${TM_OAI_API_KEY:-${OPENAI_API_KEY:-}}" ]]; then
+      POSTPROCESS_ENABLED=1
     fi
     ;;
   *)
-    cp "$RAW_TXT" "$FINAL_TXT"
+    if [[ -n "${TM_OAI_API_KEY:-${OPENAI_API_KEY:-}}" ]]; then
+      POSTPROCESS_ENABLED=1
+    fi
     ;;
 esac
 
-case "$MODE" in
+if [[ "$POSTPROCESS_ENABLED" == "1" ]]; then
+  status_notify "Polishing" "Applying OpenAI-compatible post-edit..."
+  if ! postprocess_openai "$RAW_TXT" "$FINAL_TXT"; then
+    cp "$RAW_TXT" "$FINAL_TXT"
+  fi
+else
+  cp "$RAW_TXT" "$FINAL_TXT"
+fi
+
+EFFECTIVE_MODE="$MODE"
+if [[ "$MODE" == "auto" ]]; then
+  if [[ -n "${TM_SELECTED_TEXT:-}" ]]; then
+    EFFECTIVE_MODE="replace"
+  else
+    EFFECTIVE_MODE="insert"
+  fi
+fi
+
+case "$EFFECTIVE_MODE" in
   insert)
     status_notify "Done" "Transcript inserted at caret."
     ;;
@@ -321,5 +347,5 @@ case "$MODE" in
 esac
 
 result_text="$(trim_text_file "$FINAL_TXT")"
-append_log "INFO" "success mode=$MODE output_chars=$(printf '%s' "$result_text" | wc -m | tr -d ' ')"
+append_log "INFO" "success mode=$MODE effective_mode=$EFFECTIVE_MODE postprocess=$POSTPROCESS_MODE enabled=$POSTPROCESS_ENABLED output_chars=$(printf '%s' "$result_text" | wc -m | tr -d ' ')"
 printf '%s' "$result_text"
