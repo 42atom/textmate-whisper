@@ -85,6 +85,7 @@ TM_WHISPER_FORCE_CPU=0
 TM_WHISPER_RETRY_CPU_ON_CRASH=1
 TM_WHISPER_INPUT_DEVICE=auto
 TM_VOICE_SHOW_STATUS=1
+TM_WHISPER_REC_BLINK_SEC=0.45
 ```
 
 List audio devices (recommended before setting a fixed index):
@@ -130,7 +131,8 @@ TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and
 - Press `Option+Command+F1` to toggle recording (start/stop)
 - Optional fallback: `Option+Command+F2` to force stop and write transcript
 - If selection exists, output replaces selection; otherwise it inserts at caret
-- During recording/transcribing, window title shows `🔴 REC=<device>` / `🟡 AI...` when `TM_VOICE_SHOW_STATUS=1`
+- During recording/transcribing, window title shows `🔴 REC=<device>` / `🪩 AI后处理...` when `TM_VOICE_SHOW_STATUS=1`
+- Recording title blink interval can be tuned via `TM_WHISPER_REC_BLINK_SEC` (seconds, default `0.45`)
 
 ## Design Notes
 
@@ -165,6 +167,21 @@ TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and
   - `~/.cache/textmate-whisper/logs/voice_input-YYYYMMDD.log`
   - `~/.cache/textmate-whisper/logs/record_session-YYYYMMDD.log`
   - Optional override: `TM_WHISPER_LOG_DIR=/your/path`
+
+### Window Title Error Codes (`❌ ERR=...`)
+
+When recording/transcription fails, window title shows a short error code for quick triage.
+
+| Code | Meaning | First Check |
+| --- | --- | --- |
+| `device-config` | Invalid or unsupported `TM_WHISPER_INPUT_DEVICE` value | Run `./scripts/list_input_devices.sh`, then set a valid `:N` or `auto` |
+| `start-failed` | `ffmpeg` recording process failed to start | Check mic permission and `TM_FFMPEG_BIN` |
+| `state-broken` | Active session state file is invalid/incomplete | Start a new recording session |
+| `audio-missing` | Recorded file is missing at stop time | Retry recording and inspect session folder |
+| `too-short` | Audio size/duration below minimum threshold | Hold recording longer and speak continuously |
+| `audio-empty` | Output audio file exists but is empty | Verify selected input device and microphone signal |
+| `silent` | Audio captured but peak volume is effectively silent | Confirm correct input device and system input level |
+| `transcribe` | `voice_input.sh` transcription stage failed | Check `whisper.stderr` under `~/.cache/textmate-whisper/session-*` |
 
 ## Development
 

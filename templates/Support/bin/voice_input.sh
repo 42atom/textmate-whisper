@@ -277,6 +277,21 @@ WHISPER_RETRY_CPU_ON_CRASH="${TM_WHISPER_RETRY_CPU_ON_CRASH:-1}"
 POSTPROCESS_MODE="$(printf '%s' "${TM_VOICE_POSTPROCESS:-auto}" | tr '[:upper:]' '[:lower:]')"
 TM_VOICE_SHOW_STATUS="${TM_VOICE_SHOW_STATUS:-1}"
 
+ensure_bin_dir_in_path() {
+  local bin_path="$1"
+  local bin_dir
+  [[ -n "$bin_path" ]] || return 0
+  bin_dir="$(dirname "$bin_path")"
+  case ":${PATH:-}:" in
+    *":${bin_dir}:"*) ;;
+    *) export PATH="${bin_dir}:${PATH:-}" ;;
+  esac
+}
+
+# mlx_whisper internally runs `ffmpeg` by command name.
+# TextMate runtime PATH may miss Homebrew bin, so inject resolved ffmpeg dir.
+ensure_bin_dir_in_path "$FFMPEG_BIN"
+
 append_log "INFO" "start mode=$MODE audio_file_input=${AUDIO_FILE_INPUT:-<none>} model=${WHISPER_MODEL} postprocess=${POSTPROCESS_MODE}"
 append_log "INFO" "bin ffmpeg=${FFMPEG_BIN:-<missing>} whisper=${WHISPER_BIN:-<missing>}"
 
@@ -432,6 +447,10 @@ fi
 
 if [[ ! -s "${TMP_DIR}/transcript.txt" ]] && ! grep -qi "RepositoryNotFoundError\\|Repository Not Found\\|404 Not Found" "${TMP_DIR}/whisper.stderr" "${TMP_DIR}/whisper.stdout" 2>/dev/null; then
   append_log "ERROR" "transcribe failed model=$WHISPER_MODEL stderr_file=${SESSION_DIR:-<none>}/whisper.stderr"
+  if grep -qi "FileNotFoundError: .*ffmpeg\\|No such file or directory: 'ffmpeg'" "${TMP_DIR}/whisper.stderr" "${TMP_DIR}/whisper.stdout"; then
+    persist_debug_artifacts "transcribe-failed-ffmpeg-path"
+    show_tip_and_exit "Transcription failed: ffmpeg not found in TextMate runtime PATH. Set TM_FFMPEG_BIN=/opt/homebrew/bin/ffmpeg, then reload bundles."
+  fi
   if grep -qi "No module named\\|not found\\|No such file" "${TMP_DIR}/whisper.stderr"; then
     persist_debug_artifacts "transcribe-failed-dependency"
     show_tip_and_exit "Transcription failed: whisper runtime/dependency missing."
@@ -519,7 +538,7 @@ case "$POSTPROCESS_MODE" in
 esac
 
 if [[ "$POSTPROCESS_ENABLED" == "1" ]]; then
-  status_notify "Polishing" "Applying OpenAI-compatible post-edit..."
+  status_notify "Polishing" "🪩 AI后处理..."
   if ! postprocess_openai "$RAW_TXT" "$FINAL_TXT"; then
     cp "$RAW_TXT" "$FINAL_TXT"
   fi

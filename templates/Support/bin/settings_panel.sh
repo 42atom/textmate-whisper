@@ -57,6 +57,8 @@ TM_WHISPER_RETRY_CPU_ON_CRASH=1
 # 设备指定代码修改处
 TM_WHISPER_INPUT_DEVICE=auto
 TM_VOICE_SHOW_STATUS=1
+# 录音标题闪烁间隔（秒），默认 0.45；越小越快，建议 0.25~1.0
+TM_WHISPER_REC_BLINK_SEC=0.45
 # TM_WHISPER_STATE_DIR=$HOME/.cache/textmate-whisper
 # TM_WHISPER_LOG_DIR=$HOME/.cache/textmate-whisper/logs
 

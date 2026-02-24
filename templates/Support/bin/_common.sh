@@ -30,8 +30,12 @@ is_textmate_context() {
 show_tip_and_exit() {
   local msg="$1"
   local non_tm_exit_code="${2:-1}"
+  local in_tm_context=0
 
   append_log "TIP" "$msg"
+  if is_textmate_context; then
+    in_tm_context=1
+  fi
 
   if declare -F exit_show_tool_tip >/dev/null 2>&1; then
     exit_show_tool_tip "$msg"
@@ -42,10 +46,13 @@ show_tip_and_exit() {
     osascript -e 'display notification "'"${msg//\"/\\\"}"'" with title "Whisper Voice"' >/dev/null 2>&1 || true
   fi
 
-  echo "$msg" >&2
-  if is_textmate_context; then
+  # In TextMate command context, avoid writing tip text to stderr/stdout,
+  # otherwise it may be inserted into editor content (replaceInput mode).
+  if [[ "$in_tm_context" == "1" ]]; then
     exit 0
   fi
+
+  echo "$msg" >&2
   exit "$non_tm_exit_code"
 }
 

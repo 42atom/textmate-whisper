@@ -33,8 +33,15 @@ LOG_FILE="$LOG_ROOT/record_session-$(date +%Y%m%d).log"
 strip_window_indicator_prefix() {
   local title="${1:-}"
   title="$(printf '%s' "$title" | sed -E 's/^🔴 REC=[^|]* \| //')"
+  title="$(printf '%s' "$title" | sed -E 's/^⚪ REC=[^|]* \| //')"
+  title="$(printf '%s' "$title" | sed -E 's/^❌ ERR=[^|]* \| //')"
   title="${title#🔴 REC... | }"
+  title="${title#⚪ REC... | }"
+  title="${title#❌ ERR... | }"
   title="${title#🟡 AI... | }"
+  title="${title#🪩 AI后处理... | }"
+  title="${title#⏳ Loading... | }"
+  title="${title#🟡 loading... | }"
   title="${title#\[REC\] }"
   title="${title#\[AI...\] }"
   printf '%s\n' "$title"
@@ -53,6 +60,37 @@ try
 on error
   return ""
 end try
+APPLESCRIPT
+}
+
+capture_front_window_meta_and_mark_loading() {
+  local marker="${1:-⏳ Loading... | }"
+
+  if ! is_truthy "${TM_VOICE_SHOW_STATUS:-1}"; then
+    capture_front_window_meta
+    return 0
+  fi
+  if ! command -v osascript >/dev/null 2>&1; then
+    capture_front_window_meta
+    return 0
+  fi
+
+  /usr/bin/osascript - "$marker" <<'APPLESCRIPT' 2>/dev/null || true
+on run argv
+  set marker to item 1 of argv as text
+  try
+    tell application "TextMate"
+      if (count of windows) is 0 then return ""
+      set w to front window
+      set wid to id of w as text
+      set rawName to name of w as text
+      set name of w to marker & rawName
+      return wid & tab & rawName
+    end tell
+  on error
+    return ""
+  end try
+end run
 APPLESCRIPT
 }
 
@@ -161,6 +199,78 @@ build_recording_marker() {
   printf '🔴 REC=%s |' "$shown_name"
 }
 
+build_error_marker() {
+  local code="${1:-unknown}"
+  code="$(printf '%s' "$code" | tr -cd 'A-Za-z0-9._:-')"
+  if [[ -z "$code" ]]; then
+    code="unknown"
+  fi
+  if [[ "${#code}" -gt 22 ]]; then
+    code="${code:0:22}"
+  fi
+  printf '❌ ERR=%s |' "$code"
+}
+
+show_window_error_and_tip() {
+  local code="$1"
+  local msg="$2"
+  local win_id="${3:-}"
+  local base_name="${4:-}"
+  local marker
+
+  marker="$(build_error_marker "$code")"
+  set_window_indicator "$marker" "$win_id" "$base_name"
+  show_tip_and_exit "$msg"
+}
+
+start_recording_blink_loop() {
+  local rec_pid="$1"
+  local marker_on="$2"
+  local win_id="$3"
+  local base_name="$4"
+  local marker_off current_pid blink_sec
+
+  marker_off="${marker_on/🔴/⚪}"
+  blink_sec="${TM_WHISPER_REC_BLINK_SEC:-0.45}"
+  if ! awk -v x="$blink_sec" 'BEGIN { exit !(x > 0.1 && x <= 3.0) }'; then
+    blink_sec="0.45"
+  fi
+
+  (
+    local on=1
+    while kill -0 "$rec_pid" >/dev/null 2>&1; do
+      if [[ ! -f "$STATE_FILE" ]]; then
+        break
+      fi
+      current_pid="$(read_state_var "PID" "$STATE_FILE" 2>/dev/null || true)"
+      if [[ "$current_pid" != "$rec_pid" ]]; then
+        break
+      fi
+
+      if [[ "$on" == "1" ]]; then
+        set_window_indicator "$marker_off" "$win_id" "$base_name"
+        on=0
+      else
+        set_window_indicator "$marker_on" "$win_id" "$base_name"
+        on=1
+      fi
+      sleep "$blink_sec"
+    done
+  ) >/dev/null 2>&1 &
+
+  printf '%s\n' "$!"
+}
+
+stop_recording_blink_loop() {
+  local blink_pid="${1:-}"
+  if [[ -z "$blink_pid" ]]; then
+    return 0
+  fi
+  if kill -0 "$blink_pid" >/dev/null 2>&1; then
+    kill "$blink_pid" >/dev/null 2>&1 || true
+  fi
+}
+
 audio_duration_seconds() {
   local file="$1"
   local d ffprobe_bin size bytes est
@@ -230,6 +340,7 @@ load_config_env "${TM_WHISPER_CONFIG_FILE:-$HOME/.config/textmate-whisper/config
   TM_FFMPEG_BIN \
   TM_FFPROBE_BIN \
   TM_WHISPER_INPUT_DEVICE \
+  TM_WHISPER_REC_BLINK_SEC \
   TM_VOICE_SHOW_STATUS \
   TM_WHISPER_SILENCE_DB \
   TM_WHISPER_STATE_DIR \
@@ -267,7 +378,7 @@ if [[ "$ACTION" != "start" && "$ACTION" != "stop" && "$ACTION" != "toggle" && "$
 fi
 
 state_file_is_active() {
-  local state_pid stale_win_id stale_win_title
+  local state_pid stale_win_id stale_win_title stale_blink_pid
 
   if [[ ! -f "$STATE_FILE" ]]; then
     return 1
@@ -285,6 +396,8 @@ state_file_is_active() {
 
   stale_win_id="$(read_state_var "WINDOW_ID" "$STATE_FILE")"
   stale_win_title="$(read_state_var "WINDOW_TITLE_BASE" "$STATE_FILE")"
+  stale_blink_pid="$(read_state_var "BLINK_PID" "$STATE_FILE")"
+  stop_recording_blink_loop "$stale_blink_pid"
   set_window_indicator "" "$stale_win_id" "$stale_win_title"
   append_log "WARN" "stale session removed: pid=$state_pid"
   rm -f "$STATE_FILE"
@@ -317,7 +430,7 @@ build_status_message() {
 }
 
 start_recording() {
-  local window_meta window_id window_title_base requested_input_device recording_marker
+  local window_meta window_id window_title_base requested_input_device recording_marker blink_pid
 
   if [[ -z "$FFMPEG_BIN" ]]; then
     show_tip_and_exit "ffmpeg not found. Install it or set TM_FFMPEG_BIN (current: ${FFMPEG_BIN_RAW})."
@@ -331,13 +444,30 @@ start_recording() {
     rm -f "$STATE_FILE"
   fi
 
+  window_id=""
+  window_title_base=""
+  window_meta="$(capture_front_window_meta_and_mark_loading "⏳ Loading... | ")"
+  if [[ "$window_meta" == *$'\t'* ]]; then
+    window_id="${window_meta%%$'\t'*}"
+    window_title_base="${window_meta#*$'\t'}"
+    window_title_base="$(strip_window_indicator_prefix "$window_title_base")"
+  fi
+
+  # Show a quick loading marker while resolving device and spawning ffmpeg.
+  if [[ -n "$window_id" && -n "$window_title_base" ]]; then
+    :
+  else
+    set_window_indicator "⏳ Loading... |" "$window_id" "$window_title_base"
+  fi
+  status_notify "Recording" "Preparing microphone..."
+
   requested_input_device="$WHISPER_INPUT_DEVICE"
   if ! WHISPER_INPUT_DEVICE="$(validate_and_resolve_input_device "$requested_input_device")"; then
     append_log "WARN" "invalid input device config: $requested_input_device"
     if [[ "$requested_input_device" != "auto" ]] && WHISPER_INPUT_DEVICE="$(validate_and_resolve_input_device "auto")"; then
       append_log "WARN" "fallback input device to auto from: $requested_input_device"
     else
-      show_tip_and_exit "$WHISPER_INPUT_DEVICE"
+      show_window_error_and_tip "device-config" "$WHISPER_INPUT_DEVICE" "$window_id" "$window_title_base"
     fi
   fi
 
@@ -347,15 +477,6 @@ start_recording() {
   log_file="${session_dir}/ffmpeg.log"
   start_epoch="$(date +%s)"
   mkdir -p "$session_dir"
-
-  window_id=""
-  window_title_base=""
-  window_meta="$(capture_front_window_meta)"
-  if [[ "$window_meta" == *$'\t'* ]]; then
-    window_id="${window_meta%%$'\t'*}"
-    window_title_base="${window_meta#*$'\t'}"
-    window_title_base="$(strip_window_indicator_prefix "$window_title_base")"
-  fi
 
   nohup "$FFMPEG_BIN" -nostdin -hide_banner -loglevel error \
     -f avfoundation -i "$WHISPER_INPUT_DEVICE" \
@@ -369,7 +490,7 @@ start_recording() {
       err_msg="$(tail -n 1 "$log_file")"
     fi
     rm -rf "$session_dir"
-    show_tip_and_exit "$err_msg"
+    show_window_error_and_tip "start-failed" "$err_msg" "$window_id" "$window_title_base"
   fi
 
   cat > "$STATE_FILE" <<EOF
@@ -386,6 +507,8 @@ EOF
   append_log "INFO" "recording started pid=$ffmpeg_pid device=$WHISPER_INPUT_DEVICE audio_file=$audio_file ffmpeg_log=$log_file"
   recording_marker="$(build_recording_marker "$WHISPER_INPUT_DEVICE")"
   set_window_indicator "$recording_marker" "$window_id" "$window_title_base"
+  blink_pid="$(start_recording_blink_loop "$ffmpeg_pid" "$recording_marker" "$window_id" "$window_title_base")"
+  printf 'BLINK_PID=%s\n' "$blink_pid" >> "$STATE_FILE"
   status_notify "Recording" "Started. Press Option+Command+F1 to stop."
   # Toggle command uses replaceInput output; emit selected text back so start action does not alter selection content.
   if [[ -n "${TM_SELECTED_TEXT:-}" ]]; then
@@ -395,7 +518,7 @@ EOF
 }
 
 stop_recording() {
-  local window_id window_title_base
+  local window_id window_title_base blink_pid
 
   if ! state_file_is_active; then
     show_tip_and_exit "No active recording session. Press Option+Command+F1 to start."
@@ -408,11 +531,12 @@ stop_recording() {
   start_epoch_saved="$(read_state_var "START_EPOCH" "$STATE_FILE")"
   window_id="$(read_state_var "WINDOW_ID" "$STATE_FILE")"
   window_title_base="$(read_state_var "WINDOW_TITLE_BASE" "$STATE_FILE")"
+  blink_pid="$(read_state_var "BLINK_PID" "$STATE_FILE")"
 
   if [[ -z "${pid:-}" || -z "${audio_file:-}" ]]; then
+    stop_recording_blink_loop "$blink_pid"
     rm -f "$STATE_FILE"
-    set_window_indicator "" "$window_id" "$window_title_base"
-    show_tip_and_exit "Recording state is broken. Please start recording again."
+    show_window_error_and_tip "state-broken" "Recording state is broken. Please start recording again." "$window_id" "$window_title_base"
   fi
 
   if [[ "$saved_mode" =~ ^(insert|replace|preview|auto)$ ]]; then
@@ -446,13 +570,14 @@ stop_recording() {
     append_log "WARN" "recording pid was not alive at stop: pid=$pid"
   fi
 
+  stop_recording_blink_loop "$blink_pid"
   rm -f "$STATE_FILE"
   set_window_indicator "" "$window_id" "$window_title_base"
 
   if [[ ! -f "$audio_file" ]]; then
     append_log "ERROR" "audio file missing at stop: $audio_file"
     rm -rf "$session_dir"
-    show_tip_and_exit "Recording file is missing. Please start recording again."
+    show_window_error_and_tip "audio-missing" "Recording file is missing. Please start recording again." "$window_id" "$window_title_base"
   fi
 
   wait_for_file_stable "$audio_file" 30 0.10
@@ -468,29 +593,28 @@ stop_recording() {
 
   if [[ "$audio_size" -lt 2048 ]]; then
     rm -rf "$session_dir"
-    show_tip_and_exit "Recording is too short or empty. Please hold recording longer and speak clearly."
+    show_window_error_and_tip "too-short" "Recording is too short or empty. Please hold recording longer and speak clearly." "$window_id" "$window_title_base"
   fi
 
   if awk -v d="$audio_dur" 'BEGIN { exit !(d < 0.40) }'; then
     rm -rf "$session_dir"
-    show_tip_and_exit "Recording duration is too short (${audio_dur}s). Try holding recording for at least 1 second."
+    show_window_error_and_tip "too-short" "Recording duration is too short (${audio_dur}s). Try holding recording for at least 1 second." "$window_id" "$window_title_base"
   fi
 
   if [[ ! -s "$audio_file" ]]; then
-    show_tip_and_exit "Recording file is empty. Please try again."
+    show_window_error_and_tip "audio-empty" "Recording file is empty. Please try again." "$window_id" "$window_title_base"
   fi
 
   if [[ -n "${audio_max_db:-}" ]] && awk -v v="$audio_max_db" -v t="$TM_WHISPER_SILENCE_DB" 'BEGIN { exit !(v <= t) }'; then
-    show_tip_and_exit "Recorded audio is silent (max ${audio_max_db} dB). Run 'Whisper Voice - Request Microphone Permission', then verify TM_WHISPER_INPUT_DEVICE (e.g. AirPods :1). Debug audio kept at: $audio_file"
+    show_window_error_and_tip "silent" "Recorded audio is silent (max ${audio_max_db} dB). Run 'Whisper Voice - Request Microphone Permission', then verify TM_WHISPER_INPUT_DEVICE (e.g. AirPods :1). Debug audio kept at: $audio_file" "$window_id" "$window_title_base"
   fi
 
-  set_window_indicator "🟡 AI... |" "$window_id" "$window_title_base"
+  set_window_indicator "🪩 AI后处理... |" "$window_id" "$window_title_base"
   status_notify "Transcribing" "Recording stopped. Converting speech to text..."
 
   if ! "$VOICE_INPUT_SCRIPT" --mode "$MODE" --audio-file "$audio_file"; then
     append_log "ERROR" "transcription after stop failed mode=$MODE audio_file=$audio_file size=$audio_size duration=${audio_dur}s"
-    set_window_indicator "" "$window_id" "$window_title_base"
-    show_tip_and_exit "Transcription failed. Debug audio kept at: $audio_file"
+    show_window_error_and_tip "transcribe" "Transcription failed. Debug audio kept at: $audio_file" "$window_id" "$window_title_base"
   fi
 
   set_window_indicator "" "$window_id" "$window_title_base"

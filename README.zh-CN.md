@@ -83,6 +83,7 @@ TM_WHISPER_FORCE_CPU=0
 TM_WHISPER_RETRY_CPU_ON_CRASH=1
 TM_WHISPER_INPUT_DEVICE=auto
 TM_VOICE_SHOW_STATUS=1
+TM_WHISPER_REC_BLINK_SEC=0.45
 ```
 
 建议先查看可用设备：
@@ -128,7 +129,8 @@ TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and
 - 按 `Option+Command+F1` 开关录音（开始/结束）
 - 可选兜底：按 `Option+Command+F2` 强制结束并写入文本
 - 有选区时会替换选区，无选区时会在光标处插入
-- 当 `TM_VOICE_SHOW_STATUS=1` 时，录音/转写中会显示窗口标题前缀 `🔴 REC=<设备名>` / `🟡 AI...`
+- 当 `TM_VOICE_SHOW_STATUS=1` 时，录音/转写中会显示窗口标题前缀 `🔴 REC=<设备名>` / `🪩 AI后处理...`
+- 可通过 `TM_WHISPER_REC_BLINK_SEC`（秒，默认 `0.45`）调整录音标题闪烁速度
 
 ## 实现说明
 
@@ -163,6 +165,21 @@ TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and
   - `~/.cache/textmate-whisper/logs/voice_input-YYYYMMDD.log`
   - `~/.cache/textmate-whisper/logs/record_session-YYYYMMDD.log`
   - 可选重定向：`TM_WHISPER_LOG_DIR=/your/path`
+
+### 标题栏错误码（`❌ ERR=...`）
+
+当录音或转写失败时，窗口标题会显示简短错误码，方便快速定位问题。
+
+| 错误码 | 含义 | 首要检查项 |
+| --- | --- | --- |
+| `device-config` | `TM_WHISPER_INPUT_DEVICE` 配置值非法或不受支持 | 运行 `./scripts/list_input_devices.sh`，改为有效 `:N` 或 `auto` |
+| `start-failed` | `ffmpeg` 录音进程启动失败 | 检查麦克风权限与 `TM_FFMPEG_BIN` |
+| `state-broken` | 当前会话状态文件损坏或字段不完整 | 重新开始一轮录音 |
+| `audio-missing` | 停止时找不到录音文件 | 重试录音并检查会话目录 |
+| `too-short` | 录音时长/体积低于阈值 | 延长按住录音时间并连续说话 |
+| `audio-empty` | 音频文件存在但内容为空 | 检查输入设备是否正确、有无麦克风信号 |
+| `silent` | 音频有数据但峰值接近静音 | 确认输入设备、系统输入音量与权限 |
+| `transcribe` | `voice_input.sh` 转写阶段失败 | 查看 `~/.cache/textmate-whisper/session-*` 下的 `whisper.stderr` |
 
 ## 开发校验
 
