@@ -10,17 +10,17 @@ TextMate is lightweight and fast, but it has no built-in speech-to-text workflow
 
 - Record from microphone
 - Transcribe with local Whisper MLX
-- Insert/replace/preview in TextMate
+- Insert/replace in TextMate
 - Optionally run post-edit polishing through any OpenAI-compatible API
 
 ## Features
 
 - Local transcription via `mlx_whisper` (default)
-- Recording status indicator (window title prefix `🔴 REC=<device>` / `🟡 AI...` + macOS notifications)
+- Recording status indicator (window title prefix `🔴 REC=<device>` / `🪩 AI后处理...` + macOS notifications)
 - Five commands with keyboard shortcuts
   - `Voice Dictation - Toggle Recording` (`Option+Command+F1`, primary)
   - `Voice Dictation - Stop Recording` (`Option+Command+F2`, optional fallback)
-  - `Voice Dictation - Preview Draft` (`Control+Option+Command+D`)
+  - `Whisper Voice - Enable/Disable AI Post-Edit` (`Control+Option+Command+D`, dynamic label by current state)
   - `Whisper Voice - Settings...` (menu command)
   - `Whisper Voice - Local Model Setup Guide` (menu command)
 - Optional OpenAI-compatible post-editing pipeline
@@ -125,6 +125,7 @@ TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and
 ```
 
 `TM_VOICE_POSTPROCESS=off` can force-disable post-edit even when key is configured.
+You can quickly toggle it via menu command: `Whisper Voice - Enable/Disable AI Post-Edit`.
 
 ### Start/Stop Recording Flow
 

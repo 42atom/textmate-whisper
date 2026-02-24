@@ -48,30 +48,6 @@ trim_text_file() {
   printf '%s' "$content"
 }
 
-wait_for_input_file_stable() {
-  local file="$1"
-  local max_tries="${2:-12}"
-  local sleep_sec="${3:-0.2}"
-  local prev_size="-1"
-  local stable_count=0
-  local current_size=0
-  local i
-
-  for ((i = 0; i < max_tries; i++)); do
-    current_size="$(stat -f '%z' "$file" 2>/dev/null || echo 0)"
-    if [[ "$current_size" -gt 0 && "$current_size" -eq "$prev_size" ]]; then
-      stable_count=$((stable_count + 1))
-      if [[ "$stable_count" -ge 3 ]]; then
-        break
-      fi
-    else
-      stable_count=0
-    fi
-    prev_size="$current_size"
-    sleep "$sleep_sec"
-  done
-}
-
 write_runtime_snapshot() {
   local out_file="$1"
   {
@@ -353,7 +329,7 @@ if [[ -n "$AUDIO_FILE_INPUT" ]]; then
     show_tip_and_exit "Input audio file is missing or empty: $AUDIO_FILE_INPUT"
   fi
   SESSION_DIR="$(dirname "$AUDIO_FILE_INPUT")"
-  wait_for_input_file_stable "$AUDIO_FILE_INPUT" 12 0.2
+  wait_for_file_stable "$AUDIO_FILE_INPUT" 12 0.2
   # Re-mux to a stable mono 16k PCM file to avoid occasional partial WAV state right after recording stop.
   if [[ -n "${FFMPEG_BIN:-}" ]]; then
     if ! "$FFMPEG_BIN" -nostdin -hide_banner -loglevel error \
@@ -525,12 +501,10 @@ case "$POSTPROCESS_MODE" in
   openai|openai-compatible|1|true|yes)
     POSTPROCESS_ENABLED=1
     ;;
-  auto|"")
-    if [[ -n "${TM_OAI_API_KEY:-${OPENAI_API_KEY:-}}" ]]; then
-      POSTPROCESS_ENABLED=1
+  auto|""|*)
+    if [[ -n "$POSTPROCESS_MODE" && "$POSTPROCESS_MODE" != "auto" ]]; then
+      append_log "WARN" "unknown postprocess mode=${POSTPROCESS_MODE}, treating as auto"
     fi
-    ;;
-  *)
     if [[ -n "${TM_OAI_API_KEY:-${OPENAI_API_KEY:-}}" ]]; then
       POSTPROCESS_ENABLED=1
     fi

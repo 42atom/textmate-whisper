@@ -38,12 +38,36 @@ for f in "$TARGET_BUNDLE"/Support/bin/*.sh; do
   bash -n "$f"
 done
 
+CONFIG_FILE="${TM_WHISPER_CONFIG_FILE:-$HOME/.config/textmate-whisper/config.env}"
+TOGGLE_COMMAND_PLIST="$TARGET_BUNDLE/Commands/Whisper Voice - Toggle AI Postprocess.tmCommand"
+if [[ -f "$TOGGLE_COMMAND_PLIST" ]]; then
+  mode="off"
+  if [[ -f "$CONFIG_FILE" ]]; then
+    mode="$(awk -F= '
+      /^[[:space:]]*TM_VOICE_POSTPROCESS[[:space:]]*=/ {
+        v=$2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+        gsub(/^"|"$/, "", v)
+        gsub(/^'\''|'\''$/, "", v)
+        mode=tolower(v)
+      }
+      END { print mode }
+    ' "$CONFIG_FILE")"
+  fi
+
+  if [[ "$mode" =~ ^(openai|openai-compatible|1|true|yes|on)$ ]]; then
+    /usr/libexec/PlistBuddy -c "Set :name Whisper Voice - Disable AI Post-Edit" "$TOGGLE_COMMAND_PLIST" >/dev/null 2>&1 || true
+  else
+    /usr/libexec/PlistBuddy -c "Set :name Whisper Voice - Enable AI Post-Edit" "$TOGGLE_COMMAND_PLIST" >/dev/null 2>&1 || true
+  fi
+fi
+
 cat <<MSG
 [OK] Installed TextMate bundle: $TARGET_BUNDLE
 [OK] Commands:
   - Voice Dictation - Toggle Recording        (Option+Command+F1)
   - Voice Dictation - Stop Recording          (Option+Command+F2, optional fallback)
-  - Voice Dictation - Preview Draft           (Control+Option+Command+D)
+  - Whisper Voice - Enable/Disable AI Post-Edit (Control+Option+Command+D)
   - Whisper Voice - Request Microphone Permission
   - Whisper Voice - Settings...               (menu command)
   - Whisper Voice - Local Model Setup Guide   (menu command)

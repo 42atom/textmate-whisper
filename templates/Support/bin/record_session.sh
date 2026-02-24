@@ -31,20 +31,11 @@ mkdir -p "$LOG_ROOT" >/dev/null 2>&1 || true
 LOG_FILE="$LOG_ROOT/record_session-$(date +%Y%m%d).log"
 
 strip_window_indicator_prefix() {
-  local title="${1:-}"
-  title="$(printf '%s' "$title" | sed -E 's/^🔴 REC=[^|]* \| //')"
-  title="$(printf '%s' "$title" | sed -E 's/^⚪ REC=[^|]* \| //')"
-  title="$(printf '%s' "$title" | sed -E 's/^❌ ERR=[^|]* \| //')"
-  title="${title#🔴 REC... | }"
-  title="${title#⚪ REC... | }"
-  title="${title#❌ ERR... | }"
-  title="${title#🟡 AI... | }"
-  title="${title#🪩 AI后处理... | }"
-  title="${title#⏳ Loading... | }"
-  title="${title#🟡 loading... | }"
-  title="${title#\[REC\] }"
-  title="${title#\[AI...\] }"
-  printf '%s\n' "$title"
+  printf '%s\n' "${1:-}" | sed -E \
+    -e 's/^(🔴|⚪) REC=[^|]* \| //' \
+    -e 's/^❌ ERR=[^|]* \| //' \
+    -e 's/^(🟡 AI\.\.\.|🪩 AI后处理\.\.\.|⏳ Loading\.\.\.|🟡 loading\.\.\.) \| //' \
+    -e 's/^\[(REC|AI\.\.\.)\] //'
 }
 
 capture_front_window_meta() {
@@ -310,30 +301,6 @@ audio_max_volume_db() {
   max_db="$("$FFMPEG_BIN" -nostdin -hide_banner -i "$file" -af volumedetect -f null - 2>&1 \
     | awk -F': ' '/max_volume/ { gsub(/ dB/, "", $2); print $2; exit }')"
   printf '%s\n' "$max_db"
-}
-
-wait_for_file_stable() {
-  local file="$1"
-  local max_tries="${2:-30}"
-  local sleep_sec="${3:-0.10}"
-  local prev_size="-1"
-  local stable_count=0
-  local current_size=0
-  local i
-
-  for ((i = 0; i < max_tries; i++)); do
-    current_size="$(stat -f '%z' "$file" 2>/dev/null || echo 0)"
-    if [[ "$current_size" -gt 0 && "$current_size" -eq "$prev_size" ]]; then
-      stable_count=$((stable_count + 1))
-      if [[ "$stable_count" -ge 3 ]]; then
-        break
-      fi
-    else
-      stable_count=0
-    fi
-    prev_size="$current_size"
-    sleep "$sleep_sec"
-  done
 }
 
 load_config_env "${TM_WHISPER_CONFIG_FILE:-$HOME/.config/textmate-whisper/config.env}" \

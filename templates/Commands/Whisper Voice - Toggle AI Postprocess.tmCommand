@@ -8,7 +8,7 @@
 	<string>#!/usr/bin/env bash
 set -euo pipefail
 SUPPORT_DIR="${TM_BUNDLE_SUPPORT:-${TM_BUNDLE_PATH:-$HOME/Library/Application Support/TextMate/Bundles/Whisper Voice.tmbundle}/Support}"
-"$SUPPORT_DIR/bin/bootstrap.sh" voice_input.sh --mode preview</string>
+"$SUPPORT_DIR/bin/bootstrap.sh" toggle_postprocess.sh</string>
 	<key>input</key>
 	<string>none</string>
 	<key>inputFormat</key>
@@ -16,13 +16,13 @@ SUPPORT_DIR="${TM_BUNDLE_SUPPORT:-${TM_BUNDLE_PATH:-$HOME/Library/Application Su
 	<key>keyEquivalent</key>
 	<string>^~@D</string>
 	<key>name</key>
-	<string>Voice Dictation - Preview Draft</string>
+	<string>Whisper Voice - Enable/Disable AI Post-Edit</string>
 	<key>outputCaret</key>
 	<string>afterOutput</string>
 	<key>outputFormat</key>
 	<string>text</string>
 	<key>outputLocation</key>
-	<string>newWindow</string>
+	<string>toolTip</string>
 	<key>scope</key>
 	<string>text, source, markup</string>
 	<key>semanticClass</key>

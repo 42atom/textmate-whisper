@@ -153,6 +153,30 @@ is_truthy() {
   esac
 }
 
+wait_for_file_stable() {
+  local file="$1"
+  local max_tries="${2:-30}"
+  local sleep_sec="${3:-0.10}"
+  local prev_size="-1"
+  local stable_count=0
+  local current_size=0
+  local i
+
+  for ((i = 0; i < max_tries; i++)); do
+    current_size="$(stat -f '%z' "$file" 2>/dev/null || echo 0)"
+    if [[ "$current_size" -gt 0 && "$current_size" -eq "$prev_size" ]]; then
+      stable_count=$((stable_count + 1))
+      if [[ "$stable_count" -ge 3 ]]; then
+        break
+      fi
+    else
+      stable_count=0
+    fi
+    prev_size="$current_size"
+    sleep "$sleep_sec"
+  done
+}
+
 status_notify() {
   local phase="${1:-Status}"
   local message="${2:-}"

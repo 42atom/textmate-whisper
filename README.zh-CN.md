@@ -15,11 +15,11 @@
 ## 功能
 
 - 本地 Whisper-MLX 转写（命令：`mlx_whisper`）
-- 录音状态指示（窗口标题前缀 `🔴 REC=<设备名>` / `🟡 AI...` + macOS 通知）
+- 录音状态指示（窗口标题前缀 `🔴 REC=<设备名>` / `🪩 AI后处理...` + macOS 通知）
 - 五条命令 + 快捷键
   - `Voice Dictation - Toggle Recording`（`Option+Command+F1`，主快捷键）
   - `Voice Dictation - Stop Recording`（`Option+Command+F2`，可选兜底）
-  - `Voice Dictation - Preview Draft`（`Control+Option+Command+D`）
+  - `Whisper Voice - Enable/Disable AI Post-Edit`（`Control+Option+Command+D`，菜单会随状态切换）
   - `Whisper Voice - Settings...`（菜单命令）
   - `Whisper Voice - Local Model Setup Guide`（菜单命令）
 - 可选 OpenAI 兼容后修饰
@@ -123,6 +123,7 @@ TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and
 ```
 
 可通过 `TM_VOICE_POSTPROCESS=off` 强制关闭后处理。
+也可通过菜单命令 `Whisper Voice - Enable/Disable AI Post-Edit` 快速切换。
 
 ### 开始/结束录音流程
 
