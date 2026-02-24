@@ -75,10 +75,14 @@ Use `~/.config/textmate-whisper/config.env` (created by `Whisper Voice - Setting
 ```bash
 TM_WHISPER_BIN=mlx_whisper
 TM_FFMPEG_BIN=ffmpeg
-TM_WHISPER_MODEL=mlx-community/whisper-tiny
+TM_WHISPER_MODEL=mlx-community/whisper-large-v3-turbo
+# Optional local model path example:
+# TM_WHISPER_MODEL=/Users/<you>/Models/whisper-large-v3-turbo-mlx
 TM_WHISPER_LANG=zh
 TM_WHISPER_TASK=transcribe
 TM_WHISPER_MAX_SEC=20
+TM_WHISPER_FORCE_CPU=0
+TM_WHISPER_RETRY_CPU_ON_CRASH=1
 TM_WHISPER_INPUT_DEVICE=auto
 TM_VOICE_SHOW_STATUS=1
 ```
@@ -152,7 +156,11 @@ TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and
   - Use `auto` if you do not need a fixed device index
 - Empty transcript
   - Increase `TM_WHISPER_MAX_SEC`
-  - Use a larger model (`mlx-community/whisper-medium`)
+  - Prefer `mlx-community/whisper-large-v3-turbo` (or a local turbo model path)
+- `mlx_whisper` traceback / random crash in TextMate chain
+  - Set `TM_WHISPER_RETRY_CPU_ON_CRASH=1` (enabled by default)
+  - If still unstable, set `TM_WHISPER_FORCE_CPU=1` to bypass Metal path
+  - Check per-session artifacts: `~/.cache/textmate-whisper/session-*/whisper.stderr`, `whisper.stdout`, `whisper-runtime.txt`
 - Need debug logs
   - `~/.cache/textmate-whisper/logs/voice_input-YYYYMMDD.log`
   - `~/.cache/textmate-whisper/logs/record_session-YYYYMMDD.log`

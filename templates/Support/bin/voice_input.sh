@@ -34,6 +34,10 @@ done
 LOG_ROOT="${TM_WHISPER_LOG_DIR:-$HOME/.cache/textmate-whisper/logs}"
 mkdir -p "$LOG_ROOT" >/dev/null 2>&1 || true
 LOG_FILE="$LOG_ROOT/voice_input-$(date +%Y%m%d).log"
+SESSION_DIR=""
+STATE_ROOT="${TM_WHISPER_STATE_DIR:-$HOME/.cache/textmate-whisper}"
+LOCK_DIR="${STATE_ROOT}/.voice_input.lock"
+LOCK_ACQUIRED=0
 
 trim_text_file() {
   local file="$1"
@@ -42,6 +46,106 @@ trim_text_file() {
   content="${content#"${content%%[![:space:]]*}"}"
   content="${content%"${content##*[![:space:]]}"}"
   printf '%s' "$content"
+}
+
+wait_for_input_file_stable() {
+  local file="$1"
+  local max_tries="${2:-12}"
+  local sleep_sec="${3:-0.2}"
+  local prev_size="-1"
+  local stable_count=0
+  local current_size=0
+  local i
+
+  for ((i = 0; i < max_tries; i++)); do
+    current_size="$(stat -f '%z' "$file" 2>/dev/null || echo 0)"
+    if [[ "$current_size" -gt 0 && "$current_size" -eq "$prev_size" ]]; then
+      stable_count=$((stable_count + 1))
+      if [[ "$stable_count" -ge 3 ]]; then
+        break
+      fi
+    else
+      stable_count=0
+    fi
+    prev_size="$current_size"
+    sleep "$sleep_sec"
+  done
+}
+
+write_runtime_snapshot() {
+  local out_file="$1"
+  {
+    echo "timestamp=$(date '+%Y-%m-%d %H:%M:%S %z')"
+    echo "script=$0"
+    echo "mode=$MODE"
+    echo "audio_file_input=${AUDIO_FILE_INPUT:-<none>}"
+    echo "whisper_bin=${WHISPER_BIN:-<none>}"
+    echo "ffmpeg_bin=${FFMPEG_BIN:-<none>}"
+    echo "whisper_model=${WHISPER_MODEL:-<none>}"
+    echo "whisper_lang=${WHISPER_LANG:-<none>}"
+    echo "whisper_task=${WHISPER_TASK:-<none>}"
+    echo "pwd=$(pwd)"
+    echo "sw_vers=$(sw_vers 2>/dev/null | tr '\n' ';')"
+    echo "python3=$(python3 --version 2>&1 || true)"
+    echo "env_selected_begin"
+    for key in \
+      PATH HOME USER SHELL TMPDIR LANG LC_ALL LC_CTYPE \
+      PYTHONPATH PYTHONHOME VIRTUAL_ENV CONDA_PREFIX \
+      OBJC_DISABLE_INITIALIZE_FORK_SAFETY \
+      MLX_USE_GPU MLX_METAL_DEVICE_WRAPPER_TYPE \
+      DYLD_LIBRARY_PATH DYLD_FALLBACK_LIBRARY_PATH; do
+      printf '%s=%s\n' "$key" "${!key:-}"
+    done
+    echo "env_selected_end"
+  } > "$out_file"
+}
+
+persist_debug_artifacts() {
+  local reason="${1:-unknown}"
+  local target_dir="$SESSION_DIR"
+
+  [[ -n "$target_dir" ]] || return 0
+  [[ -d "$target_dir" ]] || return 0
+
+  if [[ -f "${TMP_DIR}/whisper.stderr" ]]; then
+    cp -f "${TMP_DIR}/whisper.stderr" "${target_dir}/whisper.stderr" 2>/dev/null || true
+  fi
+  if [[ -f "${TMP_DIR}/whisper.stdout" ]]; then
+    cp -f "${TMP_DIR}/whisper.stdout" "${target_dir}/whisper.stdout" 2>/dev/null || true
+  fi
+  if [[ -f "${TMP_DIR}/ffmpeg-remux.stderr" ]]; then
+    cp -f "${TMP_DIR}/ffmpeg-remux.stderr" "${target_dir}/ffmpeg-remux.stderr" 2>/dev/null || true
+  fi
+  if [[ -f "${TMP_DIR}/transcript.txt" ]]; then
+    cp -f "${TMP_DIR}/transcript.txt" "${target_dir}/transcript-debug.txt" 2>/dev/null || true
+  fi
+
+  write_runtime_snapshot "${target_dir}/whisper-runtime.txt"
+  append_log "INFO" "debug artifacts persisted reason=${reason} dir=${target_dir}"
+}
+
+acquire_transcribe_lock() {
+  local tries="${1:-40}"
+  local sleep_sec="${2:-0.1}"
+  local i
+
+  mkdir -p "$STATE_ROOT" >/dev/null 2>&1 || true
+  for ((i = 0; i < tries; i++)); do
+    if mkdir "$LOCK_DIR" 2>/dev/null; then
+      LOCK_ACQUIRED=1
+      printf '%s\n' "$$" > "${LOCK_DIR}/pid" 2>/dev/null || true
+      return 0
+    fi
+    sleep "$sleep_sec"
+  done
+  return 1
+}
+
+release_transcribe_lock() {
+  if [[ "$LOCK_ACQUIRED" == "1" ]]; then
+    rm -rf "$LOCK_DIR" 2>/dev/null || true
+    LOCK_ACQUIRED=0
+  fi
 }
 
 postprocess_openai() {
@@ -140,6 +244,9 @@ load_config_env "${TM_WHISPER_CONFIG_FILE:-$HOME/.config/textmate-whisper/config
   TM_WHISPER_TASK \
   TM_WHISPER_MAX_SEC \
   TM_WHISPER_INPUT_DEVICE \
+  TM_WHISPER_FORCE_CPU \
+  TM_WHISPER_RETRY_CPU_ON_CRASH \
+  TM_WHISPER_STATE_DIR \
   TM_VOICE_POSTPROCESS \
   TM_OAI_BASE_URL \
   TM_OAI_API_KEY \
@@ -160,11 +267,13 @@ FFMPEG_BIN_RAW="${TM_FFMPEG_BIN:-ffmpeg}"
 WHISPER_BIN_RAW="${TM_WHISPER_BIN:-mlx_whisper}"
 FFMPEG_BIN="$(resolve_bin "$FFMPEG_BIN_RAW" || true)"
 WHISPER_BIN="$(resolve_bin "$WHISPER_BIN_RAW" || true)"
-WHISPER_MODEL="${TM_WHISPER_MODEL:-mlx-community/whisper-tiny}"
+WHISPER_MODEL="${TM_WHISPER_MODEL:-mlx-community/whisper-large-v3-turbo}"
 WHISPER_LANG="${TM_WHISPER_LANG:-zh}"
 WHISPER_TASK="${TM_WHISPER_TASK:-transcribe}"
 WHISPER_MAX_SEC="${TM_WHISPER_MAX_SEC:-20}"
 WHISPER_INPUT_DEVICE="${TM_WHISPER_INPUT_DEVICE:-auto}"
+WHISPER_FORCE_CPU="${TM_WHISPER_FORCE_CPU:-0}"
+WHISPER_RETRY_CPU_ON_CRASH="${TM_WHISPER_RETRY_CPU_ON_CRASH:-1}"
 POSTPROCESS_MODE="$(printf '%s' "${TM_VOICE_POSTPROCESS:-auto}" | tr '[:upper:]' '[:lower:]')"
 TM_VOICE_SHOW_STATUS="${TM_VOICE_SHOW_STATUS:-1}"
 
@@ -215,15 +324,31 @@ RAW_TXT="${TMP_DIR}/raw.txt"
 FINAL_TXT="${TMP_DIR}/final.txt"
 
 cleanup() {
+  release_transcribe_lock
   rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT
+
+if ! acquire_transcribe_lock 40 0.1; then
+  show_tip_and_exit "Another transcription is running. Try again in 2-3 seconds."
+fi
 
 if [[ -n "$AUDIO_FILE_INPUT" ]]; then
   if [[ ! -s "$AUDIO_FILE_INPUT" ]]; then
     show_tip_and_exit "Input audio file is missing or empty: $AUDIO_FILE_INPUT"
   fi
-  cp "$AUDIO_FILE_INPUT" "$AUDIO_FILE"
+  SESSION_DIR="$(dirname "$AUDIO_FILE_INPUT")"
+  wait_for_input_file_stable "$AUDIO_FILE_INPUT" 12 0.2
+  # Re-mux to a stable mono 16k PCM file to avoid occasional partial WAV state right after recording stop.
+  if [[ -n "${FFMPEG_BIN:-}" ]]; then
+    if ! "$FFMPEG_BIN" -nostdin -hide_banner -loglevel error \
+      -i "$AUDIO_FILE_INPUT" -ac 1 -ar 16000 -c:a pcm_s16le "$AUDIO_FILE" 2>"${TMP_DIR}/ffmpeg-remux.stderr"; then
+      append_log "WARN" "ffmpeg remux failed, fallback to raw copy: $(tr '\n' ' ' < "${TMP_DIR}/ffmpeg-remux.stderr" | head -c 240)"
+      cp "$AUDIO_FILE_INPUT" "$AUDIO_FILE"
+    fi
+  else
+    cp "$AUDIO_FILE_INPUT" "$AUDIO_FILE"
+  fi
   append_log "INFO" "using external audio file: $AUDIO_FILE_INPUT"
 else
   status_notify "Recording" "Speak now. Max ${WHISPER_MAX_SEC}s."
@@ -242,6 +367,8 @@ status_notify "Transcribing" "Converting speech to text..."
 
 run_whisper_transcribe() {
   local model="$1"
+  local lang="${2:-$WHISPER_LANG}"
+  local force_cpu="${3:-$WHISPER_FORCE_CPU}"
   local whisper_cmd
 
   whisper_cmd=(
@@ -254,19 +381,62 @@ run_whisper_transcribe() {
     --verbose False
   )
 
-  if [[ -n "$WHISPER_LANG" && "$WHISPER_LANG" != "auto" && "$WHISPER_LANG" != "none" ]]; then
-    whisper_cmd+=(--language "$WHISPER_LANG")
+  if [[ -n "$lang" && "$lang" != "auto" && "$lang" != "none" ]]; then
+    whisper_cmd+=(--language "$lang")
   fi
 
-  "${whisper_cmd[@]}" >"${TMP_DIR}/whisper.stdout" 2>"${TMP_DIR}/whisper.stderr"
+  if is_truthy "$force_cpu"; then
+    MLX_USE_GPU=0 "${whisper_cmd[@]}" >"${TMP_DIR}/whisper.stdout" 2>"${TMP_DIR}/whisper.stderr"
+  else
+    "${whisper_cmd[@]}" >"${TMP_DIR}/whisper.stdout" 2>"${TMP_DIR}/whisper.stderr"
+  fi
 }
 
-if ! run_whisper_transcribe "$WHISPER_MODEL"; then
-  append_log "ERROR" "transcribe failed model=$WHISPER_MODEL stderr=$(tr '\n' ' ' < "${TMP_DIR}/whisper.stderr" | head -c 300)"
+wait_for_transcript_file() {
+  local tries="${1:-5}"
+  local sleep_sec="${2:-0.3}"
+  local i
+
+  for ((i = 0; i < tries; i++)); do
+    if [[ -s "${TMP_DIR}/transcript.txt" ]]; then
+      return 0
+    fi
+    sleep "$sleep_sec"
+  done
+
+  [[ -s "${TMP_DIR}/transcript.txt" ]]
+}
+
+if ! run_whisper_transcribe "$WHISPER_MODEL" "$WHISPER_LANG"; then
+  if grep -qi "Traceback (most recent call last)" "${TMP_DIR}/whisper.stderr" \
+    && is_truthy "$WHISPER_RETRY_CPU_ON_CRASH" \
+    && ! is_truthy "$WHISPER_FORCE_CPU"; then
+    append_log "WARN" "mlx traceback detected on initial run, retrying with CPU mode (MLX_USE_GPU=0)."
+    rm -f "${TMP_DIR}/transcript.txt"
+    if run_whisper_transcribe "$WHISPER_MODEL" "$WHISPER_LANG" "1"; then
+      append_log "INFO" "cpu fallback succeeded after initial traceback."
+    else
+      append_log "WARN" "cpu fallback failed after initial traceback."
+    fi
+  fi
+fi
+
+if [[ ! -s "${TMP_DIR}/transcript.txt" ]] && grep -qi "Traceback (most recent call last)" "${TMP_DIR}/whisper.stderr" \
+  && is_truthy "$WHISPER_RETRY_CPU_ON_CRASH" \
+  && ! is_truthy "$WHISPER_FORCE_CPU"; then
+  append_log "WARN" "traceback persists with missing transcript, retrying CPU+auto language."
+  rm -f "${TMP_DIR}/transcript.txt"
+  run_whisper_transcribe "$WHISPER_MODEL" "auto" "1" || true
+  wait_for_transcript_file 4 0.2 || true
+fi
+
+if [[ ! -s "${TMP_DIR}/transcript.txt" ]] && ! grep -qi "RepositoryNotFoundError\\|Repository Not Found\\|404 Not Found" "${TMP_DIR}/whisper.stderr" "${TMP_DIR}/whisper.stdout" 2>/dev/null; then
+  append_log "ERROR" "transcribe failed model=$WHISPER_MODEL stderr_file=${SESSION_DIR:-<none>}/whisper.stderr"
   if grep -qi "No module named\\|not found\\|No such file" "${TMP_DIR}/whisper.stderr"; then
+    persist_debug_artifacts "transcribe-failed-dependency"
     show_tip_and_exit "Transcription failed: whisper runtime/dependency missing."
   fi
-  show_tip_and_exit "Transcription failed. Check TM_WHISPER_MODEL and mlx_whisper runtime."
+  # Keep flowing into fallback/retry branches when applicable.
 fi
 
 if [[ ! -s "${TMP_DIR}/transcript.txt" ]] \
@@ -275,15 +445,50 @@ if [[ ! -s "${TMP_DIR}/transcript.txt" ]] \
   rm -f "${TMP_DIR}/transcript.txt"
   status_notify "Transcribing" "Model unavailable, fallback to whisper-tiny..."
   append_log "WARN" "model unavailable, fallback to whisper-tiny from $WHISPER_MODEL"
-  if ! run_whisper_transcribe "mlx-community/whisper-tiny"; then
-    append_log "ERROR" "fallback transcribe failed stderr=$(tr '\n' ' ' < "${TMP_DIR}/whisper.stderr" | head -c 300)"
+  if ! run_whisper_transcribe "mlx-community/whisper-tiny" "$WHISPER_LANG"; then
+    persist_debug_artifacts "transcribe-failed-fallback-model"
+    append_log "ERROR" "fallback transcribe failed stderr_file=${SESSION_DIR:-<none>}/whisper.stderr"
     show_tip_and_exit "Transcription failed: model unavailable and fallback failed."
   fi
 fi
 
 if [[ ! -s "${TMP_DIR}/transcript.txt" ]]; then
+  append_log "WARN" "transcript missing after first pass, waiting for file visibility."
+  if wait_for_transcript_file 5 0.3; then
+    append_log "INFO" "transcript became visible after filesystem wait."
+  fi
+fi
+
+if [[ ! -s "${TMP_DIR}/transcript.txt" ]]; then
+  append_log "WARN" "transcript still missing after wait, retry with same language."
+  rm -f "${TMP_DIR}/transcript.txt"
+  if ! run_whisper_transcribe "$WHISPER_MODEL" "$WHISPER_LANG"; then
+    append_log "WARN" "retry failed model=$WHISPER_MODEL stderr=$(tr '\n' ' ' < "${TMP_DIR}/whisper.stderr" | head -c 300)"
+  fi
+  if wait_for_transcript_file 3 0.2; then
+    append_log "INFO" "transcript available after same-language retry."
+  fi
+fi
+
+if [[ ! -s "${TMP_DIR}/transcript.txt" ]] && [[ -n "$WHISPER_LANG" && "$WHISPER_LANG" != "auto" && "$WHISPER_LANG" != "none" ]]; then
+  append_log "WARN" "transcript still missing, retry with language auto-detect from $WHISPER_LANG."
+  rm -f "${TMP_DIR}/transcript.txt"
+  if ! run_whisper_transcribe "$WHISPER_MODEL" "auto"; then
+    append_log "WARN" "auto-language retry failed model=$WHISPER_MODEL stderr=$(tr '\n' ' ' < "${TMP_DIR}/whisper.stderr" | head -c 300)"
+  fi
+  if wait_for_transcript_file 3 0.2; then
+    append_log "INFO" "transcript available after auto-language retry."
+  fi
+fi
+
+if [[ ! -s "${TMP_DIR}/transcript.txt" ]]; then
+  persist_debug_artifacts "transcript-missing-final"
+  append_log "WARN" "final transcript missing; stderr_file=${SESSION_DIR:-<none>}/whisper.stderr"
   if grep -qi "RepositoryNotFoundError\\|Repository Not Found\\|404 Not Found" "${TMP_DIR}/whisper.stderr" "${TMP_DIR}/whisper.stdout" 2>/dev/null; then
     show_tip_and_exit "Transcription failed: TM_WHISPER_MODEL repo not found. Try mlx-community/whisper-tiny."
+  fi
+  if grep -qi "Traceback (most recent call last)" "${TMP_DIR}/whisper.stderr"; then
+    show_tip_and_exit "Transcription failed: mlx_whisper crashed. See whisper.stderr in session folder."
   fi
   show_tip_and_exit "No speech detected. Try speaking louder or increase TM_WHISPER_MAX_SEC."
 fi

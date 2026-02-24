@@ -45,10 +45,15 @@ create_default_config() {
 # 录音与本地转写
 TM_FFMPEG_BIN=ffmpeg
 TM_WHISPER_BIN=mlx_whisper
-TM_WHISPER_MODEL=mlx-community/whisper-tiny
+TM_WHISPER_MODEL=mlx-community/whisper-large-v3-turbo
 TM_WHISPER_LANG=zh
 TM_WHISPER_TASK=transcribe
 TM_WHISPER_MAX_SEC=20
+# MLX/Metal 稳定性开关：
+# 0=默认 GPU 路径；1=强制 CPU（更稳，通常更慢）
+TM_WHISPER_FORCE_CPU=0
+# 遇到 mlx_whisper traceback 时，自动做一次 CPU 回退重试（推荐开启）
+TM_WHISPER_RETRY_CPU_ON_CRASH=1
 # 设备指定代码修改处
 TM_WHISPER_INPUT_DEVICE=auto
 TM_VOICE_SHOW_STATUS=1

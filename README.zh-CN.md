@@ -73,10 +73,14 @@ cd <path-to>/textmate-whisper
 ```bash
 TM_WHISPER_BIN=mlx_whisper
 TM_FFMPEG_BIN=ffmpeg
-TM_WHISPER_MODEL=mlx-community/whisper-tiny
+TM_WHISPER_MODEL=mlx-community/whisper-large-v3-turbo
+# 可选：本地模型路径示例
+# TM_WHISPER_MODEL=/Users/<you>/Models/whisper-large-v3-turbo-mlx
 TM_WHISPER_LANG=zh
 TM_WHISPER_TASK=transcribe
 TM_WHISPER_MAX_SEC=20
+TM_WHISPER_FORCE_CPU=0
+TM_WHISPER_RETRY_CPU_ON_CRASH=1
 TM_WHISPER_INPUT_DEVICE=auto
 TM_VOICE_SHOW_STATUS=1
 ```
@@ -150,7 +154,11 @@ TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and
   - 不需要固定索引时可用 `TM_WHISPER_INPUT_DEVICE=auto`
 - 结果为空
   - 增加 `TM_WHISPER_MAX_SEC`
-  - 换更大模型（如 `mlx-community/whisper-medium`）
+  - 优先使用 `mlx-community/whisper-large-v3-turbo`（或本地 turbo 模型路径）
+- TextMate 链路里出现 `mlx_whisper` traceback / 随机崩溃
+  - 确认 `TM_WHISPER_RETRY_CPU_ON_CRASH=1`（默认开启）
+  - 若仍不稳，设置 `TM_WHISPER_FORCE_CPU=1`，绕过 Metal 路径
+  - 查看会话级诊断文件：`~/.cache/textmate-whisper/session-*/whisper.stderr`、`whisper.stdout`、`whisper-runtime.txt`
 - 需要调试日志
   - `~/.cache/textmate-whisper/logs/voice_input-YYYYMMDD.log`
   - `~/.cache/textmate-whisper/logs/record_session-YYYYMMDD.log`
