@@ -8,27 +8,27 @@
 	<string>#!/usr/bin/env bash
 set -euo pipefail
 SUPPORT_DIR="${TM_BUNDLE_SUPPORT:-${TM_BUNDLE_PATH:-$HOME/Library/Application Support/TextMate/Bundles/Whisper Voice.tmbundle}/Support}"
-"$SUPPORT_DIR/bin/bootstrap.sh" voice_input.sh --mode preview</string>
+"$SUPPORT_DIR/bin/bootstrap.sh" record_session.sh --action stop --mode insert</string>
 	<key>input</key>
 	<string>none</string>
 	<key>inputFormat</key>
 	<string>text</string>
 	<key>keyEquivalent</key>
-	<string>^~@D</string>
+	<string>$~@</string>
 	<key>name</key>
-	<string>Voice Dictation - Preview Draft</string>
+	<string>Voice Dictation - Stop Recording + Insert</string>
 	<key>outputCaret</key>
 	<string>afterOutput</string>
 	<key>outputFormat</key>
 	<string>text</string>
 	<key>outputLocation</key>
-	<string>newWindow</string>
+	<string>atCaret</string>
 	<key>scope</key>
 	<string>text, source, markup</string>
 	<key>semanticClass</key>
 	<string>callback.document</string>
 	<key>uuid</key>
-	<string>591D4397-1448-4E42-B78E-30332E8FADB2</string>
+	<string>B5DA8EB4-0A20-4E0C-BD5A-35B58289F6C1</string>
 	<key>version</key>
 	<integer>2</integer>
 </dict>

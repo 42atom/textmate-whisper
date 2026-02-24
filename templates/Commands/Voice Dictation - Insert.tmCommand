@@ -2,33 +2,34 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>beforeRunningCommand</key>
-  <string>nop</string>
-  <key>command</key>
-  <string>#!/usr/bin/env bash
-"$TM_BUNDLE_SUPPORT/bin/voice_input.sh" --mode insert
-</string>
-  <key>input</key>
-  <string>none</string>
-  <key>inputFormat</key>
-  <string>text</string>
-  <key>keyEquivalent</key>
-  <string>~@D</string>
-  <key>name</key>
-  <string>Voice Dictation - Insert</string>
-  <key>outputCaret</key>
-  <string>afterOutput</string>
-  <key>outputFormat</key>
-  <string>text</string>
-  <key>outputLocation</key>
-  <string>atCaret</string>
-  <key>scope</key>
-  <string>text, source, markup</string>
-  <key>semanticClass</key>
-  <string>callback.document</string>
-  <key>uuid</key>
-  <string>23EC4FD0-033C-4305-8340-EA333105E6CD</string>
-  <key>version</key>
-  <integer>2</integer>
+	<key>beforeRunningCommand</key>
+	<string>nop</string>
+	<key>command</key>
+	<string>#!/usr/bin/env bash
+set -euo pipefail
+SUPPORT_DIR="${TM_BUNDLE_SUPPORT:-${TM_BUNDLE_PATH:-$HOME/Library/Application Support/TextMate/Bundles/Whisper Voice.tmbundle}/Support}"
+"$SUPPORT_DIR/bin/bootstrap.sh" voice_input.sh --mode insert</string>
+	<key>input</key>
+	<string>none</string>
+	<key>inputFormat</key>
+	<string>text</string>
+	<key>keyEquivalent</key>
+	<string>~@D</string>
+	<key>name</key>
+	<string>Voice Dictation - Insert</string>
+	<key>outputCaret</key>
+	<string>afterOutput</string>
+	<key>outputFormat</key>
+	<string>text</string>
+	<key>outputLocation</key>
+	<string>atCaret</string>
+	<key>scope</key>
+	<string>text, source, markup</string>
+	<key>semanticClass</key>
+	<string>callback.document</string>
+	<key>uuid</key>
+	<string>23EC4FD0-033C-4305-8340-EA333105E6CD</string>
+	<key>version</key>
+	<integer>2</integer>
 </dict>
 </plist>

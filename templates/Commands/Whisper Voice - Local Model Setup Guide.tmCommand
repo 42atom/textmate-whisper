@@ -8,15 +8,13 @@
 	<string>#!/usr/bin/env bash
 set -euo pipefail
 SUPPORT_DIR="${TM_BUNDLE_SUPPORT:-${TM_BUNDLE_PATH:-$HOME/Library/Application Support/TextMate/Bundles/Whisper Voice.tmbundle}/Support}"
-"$SUPPORT_DIR/bin/bootstrap.sh" voice_input.sh --mode preview</string>
+"$SUPPORT_DIR/bin/bootstrap.sh" local_setup_guide.sh</string>
 	<key>input</key>
 	<string>none</string>
 	<key>inputFormat</key>
 	<string>text</string>
-	<key>keyEquivalent</key>
-	<string>^~@D</string>
 	<key>name</key>
-	<string>Voice Dictation - Preview Draft</string>
+	<string>Whisper Voice - Local Model Setup Guide</string>
 	<key>outputCaret</key>
 	<string>afterOutput</string>
 	<key>outputFormat</key>
@@ -28,7 +26,7 @@ SUPPORT_DIR="${TM_BUNDLE_SUPPORT:-${TM_BUNDLE_PATH:-$HOME/Library/Application Su
 	<key>semanticClass</key>
 	<string>callback.document</string>
 	<key>uuid</key>
-	<string>591D4397-1448-4E42-B78E-30332E8FADB2</string>
+	<string>88CAF3DC-2D07-4C4C-99FF-52E5C62A77FA</string>
 	<key>version</key>
 	<integer>2</integer>
 </dict>

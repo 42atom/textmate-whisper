@@ -2,14 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>beforeRunningCommand</key>
-  <string>nop</string>
-  <key>command</key>
-  <string>#!/usr/bin/env bash
-if [[ -n "${TM_SUPPORT_PATH:-}" &amp;&amp; -f "${TM_SUPPORT_PATH}/lib/bash_init.sh" ]]; then
-  # shellcheck source=/dev/null
-  . "${TM_SUPPORT_PATH}/lib/bash_init.sh"
-fi
+	<key>beforeRunningCommand</key>
+	<string>nop</string>
+	<key>command</key>
+	<string>#!/usr/bin/env bash
+set -euo pipefail
+
+SUPPORT_DIR="${TM_BUNDLE_SUPPORT:-${TM_BUNDLE_PATH:-$HOME/Library/Application Support/TextMate/Bundles/Whisper Voice.tmbundle}/Support}"
 
 PROMPT="$(osascript &lt;&lt;'APPLESCRIPT'
 try
@@ -22,6 +21,12 @@ APPLESCRIPT
 )"
 
 if [[ -z "${PROMPT// }" ]]; then
+  if [[ -n "${TM_SUPPORT_PATH:-}" &amp;&amp; -f "${TM_SUPPORT_PATH}/lib/bash_init.sh" ]]; then
+    set +e
+    # shellcheck source=/dev/null
+    . "${TM_SUPPORT_PATH}/lib/bash_init.sh"
+    set -euo pipefail
+  fi
   if declare -F exit_discard &gt;/dev/null 2&gt;&amp;1; then
     exit_discard
   fi
@@ -30,29 +35,28 @@ fi
 
 TM_VOICE_POSTPROCESS="openai" \
 TM_VOICE_USER_PROMPT="$PROMPT" \
-"$TM_BUNDLE_SUPPORT/bin/voice_input.sh" --mode insert
-</string>
-  <key>input</key>
-  <string>none</string>
-  <key>inputFormat</key>
-  <string>text</string>
-  <key>keyEquivalent</key>
-  <string>~@G</string>
-  <key>name</key>
-  <string>Voice Dictation - Insert + AI Prompt...</string>
-  <key>outputCaret</key>
-  <string>afterOutput</string>
-  <key>outputFormat</key>
-  <string>text</string>
-  <key>outputLocation</key>
-  <string>atCaret</string>
-  <key>scope</key>
-  <string>text, source, markup</string>
-  <key>semanticClass</key>
-  <string>callback.document</string>
-  <key>uuid</key>
-  <string>EF343782-BC22-4F0E-ACCD-A56533F1BB6C</string>
-  <key>version</key>
-  <integer>2</integer>
+"$SUPPORT_DIR/bin/bootstrap.sh" voice_input.sh --mode insert</string>
+	<key>input</key>
+	<string>none</string>
+	<key>inputFormat</key>
+	<string>text</string>
+	<key>keyEquivalent</key>
+	<string>~@G</string>
+	<key>name</key>
+	<string>Voice Dictation - Insert + AI Prompt...</string>
+	<key>outputCaret</key>
+	<string>afterOutput</string>
+	<key>outputFormat</key>
+	<string>text</string>
+	<key>outputLocation</key>
+	<string>atCaret</string>
+	<key>scope</key>
+	<string>text, source, markup</string>
+	<key>semanticClass</key>
+	<string>callback.document</string>
+	<key>uuid</key>
+	<string>EF343782-BC22-4F0E-ACCD-A56533F1BB6C</string>
+	<key>version</key>
+	<integer>2</integer>
 </dict>
 </plist>
