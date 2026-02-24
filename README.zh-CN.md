@@ -27,14 +27,23 @@
 
 ## 依赖
 
-- macOS
+- macOS（Apple Silicon，M1 及以上）
 - TextMate 2
+- Python 3.9+
 - `ffmpeg`
-- `mlx_whisper`
+- `mlx_whisper`（由 `mlx-whisper` 提供）
+
+安装依赖：
+
+```bash
+brew install ffmpeg
+python3 -m pip install -U mlx-whisper
+```
 
 检查命令：
 
 ```bash
+python3 --version
 command -v ffmpeg
 command -v mlx_whisper
 ```
@@ -42,13 +51,17 @@ command -v mlx_whisper
 ## 安装
 
 ```bash
-cd <path-to>/textmate-whisper
+git clone https://github.com/42atom/textmate-whisper.git
+cd textmate-whisper
 ./scripts/install.sh
 ```
 
 然后在 TextMate 执行：
 
 - `Bundles -> Bundle Editor -> Reload Bundles`
+- 首次使用（必做一次）：
+  - `Bundles -> Whisper Voice -> Request Microphone Permission`
+  - 保持 TextMate 在前台，触发一次录音，并在 macOS 弹窗中点 `Allow`
 - 打开设置面板：
   - `Bundles -> Whisper Voice -> Whisper Voice - Settings...`
 - 打开本地模型说明：
@@ -60,7 +73,7 @@ cd <path-to>/textmate-whisper
 ## 卸载
 
 ```bash
-cd <path-to>/textmate-whisper
+cd textmate-whisper
 ./scripts/uninstall.sh
 ```
 

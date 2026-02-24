@@ -48,6 +48,26 @@ trim_text_file() {
   printf '%s' "$content"
 }
 
+looks_like_ai_refusal_response() {
+  local text="$1"
+  local lower
+  lower="$(printf '%s' "$text" | tr '[:upper:]' '[:lower:]')"
+  case "$lower" in
+    *"i apologize"*|*"cannot work with the text"*|*"incomplete or corrupted"*|*"please share it"*|*"please share"*|*"cannot help with that request"*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+exit_with_empty_output() {
+  local reason="${1:-empty_output}"
+  append_log "INFO" "empty output suppressed reason=${reason}"
+  exit 0
+}
+
 write_runtime_snapshot() {
   local out_file="$1"
   {
@@ -485,13 +505,14 @@ if [[ ! -s "${TMP_DIR}/transcript.txt" ]]; then
   if grep -qi "Traceback (most recent call last)" "${TMP_DIR}/whisper.stderr"; then
     show_tip_and_exit "Transcription failed: mlx_whisper crashed. See whisper.stderr in session folder."
   fi
-  show_tip_and_exit "No speech detected. Try speaking louder or increase TM_WHISPER_MAX_SEC."
+  exit_with_empty_output "no_speech_detected"
 fi
 
 trim_text_file "${TMP_DIR}/transcript.txt" > "$RAW_TXT"
 if [[ ! -s "$RAW_TXT" ]]; then
-  show_tip_and_exit "Transcript is empty. Try longer recording (TM_WHISPER_MAX_SEC=30)."
+  exit_with_empty_output "empty_raw_transcript"
 fi
+raw_text="$(trim_text_file "$RAW_TXT")"
 
 POSTPROCESS_ENABLED=0
 case "$POSTPROCESS_MODE" in
@@ -529,6 +550,23 @@ if [[ "$MODE" == "auto" ]]; then
   fi
 fi
 
+result_text="$(trim_text_file "$FINAL_TXT")"
+result_text="$(printf '%s' "$result_text" | sed -E 's/^Recording started\. Press Option\+Command\+F1 to stop\.//')"
+result_text="$(printf '%s' "$result_text" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+
+if [[ "$POSTPROCESS_ENABLED" == "1" ]] && looks_like_ai_refusal_response "$result_text"; then
+  raw_chars="$(printf '%s' "$raw_text" | wc -m | tr -d ' ')"
+  append_log "WARN" "postprocess returned non-content/refusal text, raw_chars=${raw_chars}"
+  if [[ "$raw_chars" -le 12 ]]; then
+    exit_with_empty_output "postprocess_refusal_with_short_raw"
+  fi
+  result_text="$raw_text"
+fi
+
+if [[ -z "$result_text" ]]; then
+  exit_with_empty_output "empty_final_output"
+fi
+
 case "$EFFECTIVE_MODE" in
   insert)
     status_notify "Done" "Transcript inserted at caret."
@@ -544,6 +582,5 @@ case "$EFFECTIVE_MODE" in
     ;;
 esac
 
-result_text="$(trim_text_file "$FINAL_TXT")"
 append_log "INFO" "success mode=$MODE effective_mode=$EFFECTIVE_MODE postprocess=$POSTPROCESS_MODE enabled=$POSTPROCESS_ENABLED output_chars=$(printf '%s' "$result_text" | wc -m | tr -d ' ')"
 printf '%s' "$result_text"

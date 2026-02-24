@@ -29,14 +29,23 @@ TextMate is lightweight and fast, but it has no built-in speech-to-text workflow
 
 ## Requirements
 
-- macOS
+- macOS (Apple Silicon, M1 or later)
 - TextMate 2
+- Python 3.9+
 - `ffmpeg` (record audio)
-- `mlx_whisper` (transcribe audio)
+- `mlx_whisper` (transcribe audio, provided by `mlx-whisper`)
+
+Install dependencies:
+
+```bash
+brew install ffmpeg
+python3 -m pip install -U mlx-whisper
+```
 
 Check dependencies:
 
 ```bash
+python3 --version
 command -v ffmpeg
 command -v mlx_whisper
 ```
@@ -44,13 +53,17 @@ command -v mlx_whisper
 ## Install
 
 ```bash
-cd <path-to>/textmate-whisper
+git clone https://github.com/42atom/textmate-whisper.git
+cd textmate-whisper
 ./scripts/install.sh
 ```
 
 Then in TextMate:
 
 - `Bundles -> Bundle Editor -> Reload Bundles`
+- First-time setup (required once):
+  - `Bundles -> Whisper Voice -> Request Microphone Permission`
+  - Keep TextMate frontmost, trigger recording once, and click `Allow` in macOS prompt
 - Open settings panel:
   - `Bundles -> Whisper Voice -> Whisper Voice - Settings...`
 - Open local setup guide:
@@ -62,7 +75,7 @@ Then in TextMate:
 ## Uninstall
 
 ```bash
-cd <path-to>/textmate-whisper
+cd textmate-whisper
 ./scripts/uninstall.sh
 ```
 
