@@ -135,14 +135,16 @@ TM_VOICE_POST_OUTPUT_LANG=auto
 # auto: enable only when API key is set
 # openai: force post-edit path (falls back to raw text if API fails)
 # post-edit output language: auto|en|zh|ja|ko
+# post-edit context window: before 200 chars + after 200 chars (enabled by default)
 
-TM_VOICE_POST_PROMPT=Polish this transcript into concise writing.
-TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and readability while preserving meaning. Return only the rewritten text.
+TM_VOICE_POST_PROMPT=Punctuation-only pass: add/fix punctuation and spacing. Do not change words or meaning.
+TM_VOICE_POST_SYSTEM_PROMPT=You are a strict transcript punctuation corrector. Only correct punctuation and spacing. Keep words, characters, order, and meaning unchanged. Do not paraphrase, summarize, rewrite, translate, or expand. Return only the corrected text.
 ```
 
 `TM_VOICE_POSTPROCESS=off` can force-disable post-edit even when key is configured.
 You can quickly toggle it via menu command: `Whisper Voice - Enable/Disable AI Post-Edit`.
 You can select post-edit output language via: `Whisper Voice - AI Output Language: ...` (effective only when post-edit is enabled).
+When post-edit is enabled, it also sends a context window around caret (200 chars before + 200 chars after) to improve continuity.
 
 ### Start/Stop Recording Flow
 

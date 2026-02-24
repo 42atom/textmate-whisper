@@ -38,6 +38,8 @@ SESSION_DIR=""
 STATE_ROOT="${TM_WHISPER_STATE_DIR:-$HOME/.cache/textmate-whisper}"
 LOCK_DIR="${STATE_ROOT}/.voice_input.lock"
 LOCK_ACQUIRED=0
+POST_CONTEXT_BEFORE=""
+POST_CONTEXT_AFTER=""
 
 trim_text_file() {
   local file="$1"
@@ -46,6 +48,123 @@ trim_text_file() {
   content="${content#"${content%%[![:space:]]*}"}"
   content="${content%"${content##*[![:space:]]}"}"
   printf '%s' "$content"
+}
+
+capture_context_window_from_file() {
+  local before_chars="$1"
+  local after_chars="$2"
+  local out_before="$3"
+  local out_after="$4"
+
+  [[ -n "${TM_FILEPATH:-}" ]] || return 1
+  [[ -r "${TM_FILEPATH:-}" ]] || return 1
+  [[ "${TM_LINE_NUMBER:-}" =~ ^[0-9]+$ ]] || return 1
+  [[ "${TM_COLUMN_NUMBER:-}" =~ ^[0-9]+$ ]] || return 1
+
+  TM_VOICE_CONTEXT_FILE="$TM_FILEPATH" \
+  TM_VOICE_CONTEXT_LINE="$TM_LINE_NUMBER" \
+  TM_VOICE_CONTEXT_COL="$TM_COLUMN_NUMBER" \
+  TM_VOICE_CONTEXT_BEFORE_N="$before_chars" \
+  TM_VOICE_CONTEXT_AFTER_N="$after_chars" \
+  python3 - "$out_before" "$out_after" <<'PY'
+import os
+from pathlib import Path
+import sys
+
+before_path = Path(sys.argv[1])
+after_path = Path(sys.argv[2])
+file_path = Path(os.environ["TM_VOICE_CONTEXT_FILE"])
+line_num = int(os.environ["TM_VOICE_CONTEXT_LINE"])
+col_num = int(os.environ["TM_VOICE_CONTEXT_COL"])
+before_n = max(0, int(os.environ["TM_VOICE_CONTEXT_BEFORE_N"]))
+after_n = max(0, int(os.environ["TM_VOICE_CONTEXT_AFTER_N"]))
+
+text = file_path.read_text(encoding="utf-8", errors="ignore")
+if not text:
+    before_path.write_text("", encoding="utf-8")
+    after_path.write_text("", encoding="utf-8")
+    raise SystemExit(0)
+
+lines = text.splitlines(keepends=True)
+if not lines:
+    offset = 0
+else:
+    line_num = max(1, min(line_num, len(lines)))
+    prefix = sum(len(lines[i]) for i in range(line_num - 1))
+    line_text = lines[line_num - 1]
+    line_text_no_newline = line_text.rstrip("\r\n")
+    col_index = max(0, min(col_num - 1, len(line_text_no_newline)))
+    offset = min(len(text), prefix + col_index)
+
+before = text[max(0, offset - before_n):offset]
+after = text[offset:offset + after_n]
+before_path.write_text(before, encoding="utf-8")
+after_path.write_text(after, encoding="utf-8")
+PY
+}
+
+capture_context_window_from_current_line() {
+  local before_chars="$1"
+  local after_chars="$2"
+  local out_before="$3"
+  local out_after="$4"
+  local line col raw_col col_index prefix suffix
+
+  line="${TM_CURRENT_LINE:-}"
+  col="${TM_COLUMN_NUMBER:-1}"
+  if [[ ! "$col" =~ ^[0-9]+$ ]]; then
+    col=1
+  fi
+  raw_col=$((col - 1))
+  if (( raw_col < 0 )); then
+    raw_col=0
+  fi
+
+  if (( raw_col > ${#line} )); then
+    col_index=${#line}
+  else
+    col_index=$raw_col
+  fi
+
+  prefix="${line:0:col_index}"
+  suffix="${line:col_index}"
+  if (( ${#prefix} > before_chars )); then
+    prefix="${prefix: -before_chars}"
+  fi
+  if (( ${#suffix} > after_chars )); then
+    suffix="${suffix:0:after_chars}"
+  fi
+
+  printf '%s' "$prefix" > "$out_before"
+  printf '%s' "$suffix" > "$out_after"
+}
+
+collect_postprocess_context_window() {
+  local before_chars="$1"
+  local after_chars="$2"
+  local before_file after_file
+
+  POST_CONTEXT_BEFORE=""
+  POST_CONTEXT_AFTER=""
+  if (( before_chars <= 0 && after_chars <= 0 )); then
+    return 0
+  fi
+
+  before_file="${TMP_DIR}/context-before.txt"
+  after_file="${TMP_DIR}/context-after.txt"
+
+  if ! capture_context_window_from_file "$before_chars" "$after_chars" "$before_file" "$after_file"; then
+    capture_context_window_from_current_line "$before_chars" "$after_chars" "$before_file" "$after_file" || true
+  fi
+
+  if [[ -f "$before_file" ]]; then
+    POST_CONTEXT_BEFORE="$(trim_text_file "$before_file")"
+  fi
+  if [[ -f "$after_file" ]]; then
+    POST_CONTEXT_AFTER="$(trim_text_file "$after_file")"
+  fi
+
+  append_log "INFO" "postprocess context window before_chars=$(printf '%s' "$POST_CONTEXT_BEFORE" | wc -m | tr -d ' ') after_chars=$(printf '%s' "$POST_CONTEXT_AFTER" | wc -m | tr -d ' ')"
 }
 
 normalize_post_output_lang() {
@@ -108,6 +227,30 @@ looks_like_ai_refusal_response() {
       return 1
       ;;
   esac
+}
+
+is_punctuation_only_edit() {
+  local original="$1"
+  local edited="$2"
+  TM_VOICE_ORIGINAL_TEXT="$original" TM_VOICE_EDITED_TEXT="$edited" python3 - <<'PY'
+import os
+import unicodedata
+
+orig = os.getenv("TM_VOICE_ORIGINAL_TEXT", "")
+edit = os.getenv("TM_VOICE_EDITED_TEXT", "")
+
+def strip_punct_and_space(text: str) -> str:
+    out = []
+    for ch in text:
+        if ch.isspace():
+            continue
+        if unicodedata.category(ch).startswith("P"):
+            continue
+        out.append(ch)
+    return "".join(out)
+
+raise SystemExit(0 if strip_punct_and_space(orig) == strip_punct_and_space(edit) else 1)
+PY
 }
 
 exit_with_empty_output() {
@@ -201,6 +344,7 @@ postprocess_openai() {
   local model="${TM_OAI_MODEL:-${OPENAI_MODEL:-gpt-4o-mini}}"
   local timeout_sec="${TM_OAI_TIMEOUT_SEC:-45}"
   local post_lang_raw post_lang_normalized post_lang_name
+  local context_before context_after
 
   if [[ -z "$api_key" ]]; then
     cp "$in_file" "$out_file"
@@ -221,9 +365,13 @@ postprocess_openai() {
     post_lang_normalized="auto"
   fi
   post_lang_name="$(post_output_lang_name "$post_lang_normalized")"
+  context_before="${POST_CONTEXT_BEFORE:-}"
+  context_after="${POST_CONTEXT_AFTER:-}"
   TM_OAI_MODEL="$model" \
   TM_VOICE_POST_OUTPUT_LANG_NORM="$post_lang_normalized" \
   TM_VOICE_POST_OUTPUT_LANG_NAME="$post_lang_name" \
+  TM_VOICE_CONTEXT_BEFORE="$context_before" \
+  TM_VOICE_CONTEXT_AFTER="$context_after" \
   python3 - "$in_file" > "$payload_file" <<'PY'
 import json
 import os
@@ -234,26 +382,60 @@ text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore").st
 model = os.getenv("TM_OAI_MODEL", "gpt-4o-mini")
 lang_mode = os.getenv("TM_VOICE_POST_OUTPUT_LANG_NORM", "auto").strip().lower()
 lang_name = os.getenv("TM_VOICE_POST_OUTPUT_LANG_NAME", "Original transcript language").strip()
-system_prompt = os.getenv(
-    "TM_VOICE_POST_SYSTEM_PROMPT",
-    "You are a writing assistant. Improve punctuation and readability while preserving meaning. Return only the rewritten text.",
-).strip()
-user_prompt = os.getenv("TM_VOICE_USER_PROMPT", "").strip() or os.getenv("TM_VOICE_POST_PROMPT", "").strip()
+context_before = os.getenv("TM_VOICE_CONTEXT_BEFORE", "").strip()
+context_after = os.getenv("TM_VOICE_CONTEXT_AFTER", "").strip()
+default_system_prompt = (
+    "You are a strict transcript punctuation corrector. "
+    "Only correct punctuation and spacing. "
+    "Keep words, characters, order, and meaning unchanged. "
+    "Do not paraphrase, summarize, rewrite, translate, or expand. "
+    "Return only the corrected text."
+)
+system_prompt = os.getenv("TM_VOICE_POST_SYSTEM_PROMPT", default_system_prompt).strip()
+legacy_system_prompt = "You are a writing assistant. Improve punctuation and readability while preserving meaning. Return only the rewritten text."
+legacy_system_prompt_v2 = (
+    "You are a strict transcript post-editor. Do minimal edits only: punctuation, spacing, and obvious ASR mistakes. "
+    "Preserve wording, line breaks, tone, imagery, and sentence order. Do not paraphrase, summarize, embellish, or expand. "
+    "Return only the edited text."
+)
+legacy_system_prompt_v3 = (
+    "You are a strict transcript post-editor. Do minimal edits only: punctuation, spacing, and obvious ASR mistakes. "
+    "Preserve wording, line breaks, tone, imagery, and sentence order. For Chinese content, prefer Simplified Chinese and "
+    "correct obvious homophone ASR errors. Do not paraphrase, summarize, embellish, or expand. Return only the edited text."
+)
+if system_prompt in {legacy_system_prompt, legacy_system_prompt_v2, legacy_system_prompt_v3}:
+    system_prompt = default_system_prompt
+
+raw_user_prompt = os.getenv("TM_VOICE_USER_PROMPT", "").strip() or os.getenv("TM_VOICE_POST_PROMPT", "").strip()
+legacy_user_prompt = "Polish this transcript into concise writing."
+legacy_user_prompt_v2 = "Minimal edit only: fix punctuation, spacing, and obvious ASR errors. Keep original wording and line breaks."
+legacy_user_prompt_v3 = (
+    "Minimal edit only: fix punctuation, spacing, and obvious ASR errors. Keep original wording and line breaks. "
+    "If the transcript is Chinese, correct obvious homophone misrecognitions while keeping Simplified Chinese."
+)
+if raw_user_prompt in {legacy_user_prompt, legacy_user_prompt_v2, legacy_user_prompt_v3}:
+    raw_user_prompt = ""
+
+user_prompt = raw_user_prompt
 if not user_prompt:
     if lang_mode == "auto":
-        user_prompt = "Polish this transcript for written prose. Keep the original meaning and language."
+        user_prompt = "Punctuation-only pass: add/fix punctuation and spacing. Do not change words or meaning."
     else:
         user_prompt = (
-            f"Polish this transcript and output only {lang_name}. "
-            f"Preserve the original meaning. Translate when needed."
+            f"Translate the transcript faithfully to {lang_name}. "
+            "Keep line structure as much as possible, and avoid embellishment."
         )
 else:
     if lang_mode == "auto":
-        user_prompt = f"{user_prompt} Keep output in the same language as the transcript.".strip()
+        user_prompt = (
+            f"{user_prompt} Apply punctuation-only correction. "
+            "Do not rewrite wording or meaning."
+        ).strip()
     else:
         user_prompt = (
             f"{user_prompt} Required output language: {lang_name}. "
-            f"Translate to {lang_name} when needed and output only {lang_name}."
+            f"Translate faithfully to {lang_name} and output only {lang_name}. "
+            "Avoid paraphrasing and embellishment."
         ).strip()
 
 if lang_mode != "auto":
@@ -261,15 +443,34 @@ if lang_mode != "auto":
         f"{system_prompt} Strict requirement: final output must be entirely in {lang_name}. "
         "Do not mix languages."
     ).strip()
+if context_before or context_after:
+    system_prompt = (
+        f"{system_prompt} Use context snippets only for continuity and terminology; "
+        "do not copy context text verbatim."
+    ).strip()
+
+content_parts = [f"Instruction:\n{user_prompt}"]
+if context_before:
+    content_parts.append(
+        "Context Before Caret (reference only):\n"
+        f"{context_before}"
+    )
+content_parts.append(f"Transcript:\n{text}")
+if context_after:
+    content_parts.append(
+        "Context After Caret (reference only):\n"
+        f"{context_after}"
+    )
+user_content = "\n\n".join(content_parts)
 
 payload = {
     "model": model,
-    "temperature": 0.2,
+    "temperature": 0.0,
     "messages": [
         {"role": "system", "content": system_prompt},
         {
             "role": "user",
-            "content": f"Instruction:\n{user_prompt}\n\nTranscript:\n{text}",
+            "content": user_content,
         },
     ],
 }
@@ -614,6 +815,7 @@ case "$POSTPROCESS_MODE" in
 esac
 
 if [[ "$POSTPROCESS_ENABLED" == "1" ]]; then
+  collect_postprocess_context_window 200 200
   status_notify "Polishing" "🪩 AI后处理..."
   if ! postprocess_openai "$RAW_TXT" "$FINAL_TXT"; then
     cp "$RAW_TXT" "$FINAL_TXT"
@@ -642,6 +844,14 @@ if [[ "$POSTPROCESS_ENABLED" == "1" ]] && looks_like_ai_refusal_response "$resul
     exit_with_empty_output "postprocess_refusal_with_short_raw"
   fi
   result_text="$raw_text"
+fi
+
+if [[ "$POSTPROCESS_ENABLED" == "1" ]]; then
+  post_output_lang_norm="$(normalize_post_output_lang "${TM_VOICE_POST_OUTPUT_LANG:-auto}")"
+  if [[ "$post_output_lang_norm" == "auto" ]] && ! is_punctuation_only_edit "$raw_text" "$result_text"; then
+    append_log "WARN" "postprocess changed non-punctuation content in punct-only mode, fallback to raw transcript"
+    result_text="$raw_text"
+  fi
 fi
 
 if [[ -z "$result_text" ]]; then

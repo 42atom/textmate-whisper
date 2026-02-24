@@ -85,8 +85,8 @@ TM_OAI_API_KEY=
 TM_OAI_TIMEOUT_SEC=45
 
 # 可选：后处理提示词
-TM_VOICE_POST_PROMPT=Polish this transcript into concise writing.
-TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and readability while preserving meaning. Return only the rewritten text.
+TM_VOICE_POST_PROMPT=Punctuation-only pass: add/fix punctuation and spacing. Do not change words or meaning.
+TM_VOICE_POST_SYSTEM_PROMPT=You are a strict transcript punctuation corrector. Only correct punctuation and spacing. Keep words, characters, order, and meaning unchanged. Do not paraphrase, summarize, rewrite, translate, or expand. Return only the corrected text.
 CONF
 }
 

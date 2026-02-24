@@ -133,14 +133,16 @@ TM_VOICE_POST_OUTPUT_LANG=auto
 # auto: 仅当配置了 API key 时启用
 # openai: 强制走后处理（API 失败会回退原始转写）
 # 后处理输出语言：auto|en|zh|ja|ko
+# 后处理上下文窗口：默认启用，光标前 200 字 + 后 200 字
 
-TM_VOICE_POST_PROMPT=Polish this transcript into concise writing.
-TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and readability while preserving meaning. Return only the rewritten text.
+TM_VOICE_POST_PROMPT=Punctuation-only pass: add/fix punctuation and spacing. Do not change words or meaning.
+TM_VOICE_POST_SYSTEM_PROMPT=You are a strict transcript punctuation corrector. Only correct punctuation and spacing. Keep words, characters, order, and meaning unchanged. Do not paraphrase, summarize, rewrite, translate, or expand. Return only the corrected text.
 ```
 
 可通过 `TM_VOICE_POSTPROCESS=off` 强制关闭后处理。
 也可通过菜单命令 `Whisper Voice - Enable/Disable AI Post-Edit` 快速切换。
 后处理输出语言也可通过菜单命令 `Whisper Voice - AI Output Language: ...` 直接选择（仅在启用后处理时生效）。
+启用后处理时，会额外传递光标邻域上下文（前 200 字 + 后 200 字）以提升续写连贯性。
 
 ### 开始/结束录音流程
 
