@@ -67,6 +67,9 @@ TM_WHISPER_REC_BLINK_SEC=0.45
 # auto: 配置了 API key 才启用后处理（推荐）
 # openai: 强制走后处理（API 失败会回退原始转写）
 TM_VOICE_POSTPROCESS=auto
+# AI 后处理输出语言：auto|en|zh|ja|ko
+# auto=跟随原始转写语言（推荐）
+TM_VOICE_POST_OUTPUT_LANG=auto
 
 # OpenAI 兼容 API（任选其一服务填写）
 # DeepSeek 示例：

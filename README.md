@@ -16,11 +16,12 @@ TextMate is lightweight and fast, but it has no built-in speech-to-text workflow
 ## Features
 
 - Local transcription via `mlx_whisper` (default)
-- Recording status indicator (window title prefix `🔴 REC=<device>` / `🪩 AI后处理...` + macOS notifications)
+- Recording status indicator (window title prefix `🔴 REC=<device> ⌥+⌘+F1 to stop` / `🪩 AI后处理...` + macOS notifications)
 - Five commands with keyboard shortcuts
   - `Voice Dictation - Toggle Recording` (`Option+Command+F1`, primary)
   - `Voice Dictation - Stop Recording` (`Option+Command+F2`, optional fallback)
   - `Whisper Voice - Enable/Disable AI Post-Edit` (`Control+Option+Command+D`, dynamic label by current state)
+  - `Whisper Voice - AI Output Language: <Auto|English|Chinese|Japanese|Korean>` (menu command, only effective when AI Post-Edit is enabled)
   - `Whisper Voice - Settings...` (menu command)
   - `Whisper Voice - Local Model Setup Guide` (menu command)
 - Optional OpenAI-compatible post-editing pipeline
@@ -129,9 +130,11 @@ TM_OAI_MODEL=gpt-4o-mini
 TM_OAI_TIMEOUT_SEC=45
 
 TM_VOICE_POSTPROCESS=auto
+TM_VOICE_POST_OUTPUT_LANG=auto
 # off|none: disable post-edit
 # auto: enable only when API key is set
 # openai: force post-edit path (falls back to raw text if API fails)
+# post-edit output language: auto|en|zh|ja|ko
 
 TM_VOICE_POST_PROMPT=Polish this transcript into concise writing.
 TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and readability while preserving meaning. Return only the rewritten text.
@@ -139,13 +142,14 @@ TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and
 
 `TM_VOICE_POSTPROCESS=off` can force-disable post-edit even when key is configured.
 You can quickly toggle it via menu command: `Whisper Voice - Enable/Disable AI Post-Edit`.
+You can select post-edit output language via: `Whisper Voice - AI Output Language: ...` (effective only when post-edit is enabled).
 
 ### Start/Stop Recording Flow
 
 - Press `Option+Command+F1` to toggle recording (start/stop)
 - Optional fallback: `Option+Command+F2` to force stop and write transcript
 - If selection exists, output replaces selection; otherwise it inserts at caret
-- During recording/transcribing, window title shows `🔴 REC=<device>` / `🪩 AI后处理...` when `TM_VOICE_SHOW_STATUS=1`
+- During recording/transcribing, window title shows `🔴 REC=<device> ⌥+⌘+F1 to stop` / `🪩 AI后处理...` when `TM_VOICE_SHOW_STATUS=1`
 - Recording title blink interval can be tuned via `TM_WHISPER_REC_BLINK_SEC` (seconds, default `0.45`)
 
 ## Design Notes

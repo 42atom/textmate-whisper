@@ -40,6 +40,7 @@ done
 
 CONFIG_FILE="${TM_WHISPER_CONFIG_FILE:-$HOME/.config/textmate-whisper/config.env}"
 TOGGLE_COMMAND_PLIST="$TARGET_BUNDLE/Commands/Whisper Voice - Toggle AI Postprocess.tmCommand"
+LANG_COMMAND_PLIST="$TARGET_BUNDLE/Commands/Whisper Voice - Set AI Output Language.tmCommand"
 if [[ -f "$TOGGLE_COMMAND_PLIST" ]]; then
   mode="off"
   if [[ -f "$CONFIG_FILE" ]]; then
@@ -62,12 +63,48 @@ if [[ -f "$TOGGLE_COMMAND_PLIST" ]]; then
   fi
 fi
 
+if [[ -f "$LANG_COMMAND_PLIST" ]]; then
+  post_lang="auto"
+  if [[ -f "$CONFIG_FILE" ]]; then
+    post_lang="$(awk -F= '
+      /^[[:space:]]*TM_VOICE_POST_OUTPUT_LANG[[:space:]]*=/ {
+        v=$2
+        gsub(/^[[:space:]]+|[[:space:]]+$/, "", v)
+        gsub(/^"|"$/, "", v)
+        gsub(/^'\''|'\''$/, "", v)
+        lang=tolower(v)
+      }
+      END { print lang }
+    ' "$CONFIG_FILE")"
+  fi
+
+  case "$post_lang" in
+    en|eng|english)
+      lang_label="English"
+      ;;
+    zh|zhcn|zh_cn|zh-cn|cn|chinese|simplifiedchinese|simplified)
+      lang_label="Chinese"
+      ;;
+    ja|jp|jpn|japanese)
+      lang_label="Japanese"
+      ;;
+    ko|kr|kor|korean)
+      lang_label="Korean"
+      ;;
+    *)
+      lang_label="Auto"
+      ;;
+  esac
+  /usr/libexec/PlistBuddy -c "Set :name Whisper Voice - AI Output Language: ${lang_label}" "$LANG_COMMAND_PLIST" >/dev/null 2>&1 || true
+fi
+
 cat <<MSG
 [OK] Installed TextMate bundle: $TARGET_BUNDLE
 [OK] Commands:
   - Voice Dictation - Toggle Recording        (Option+Command+F1)
   - Voice Dictation - Stop Recording          (Option+Command+F2, optional fallback)
   - Whisper Voice - Enable/Disable AI Post-Edit (Control+Option+Command+D)
+  - Whisper Voice - AI Output Language: <Auto|English|Chinese|Japanese|Korean>
   - Whisper Voice - Request Microphone Permission
   - Whisper Voice - Settings...               (menu command)
   - Whisper Voice - Local Model Setup Guide   (menu command)

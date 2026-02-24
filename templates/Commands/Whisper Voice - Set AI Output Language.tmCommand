@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>beforeRunningCommand</key>
+	<string>nop</string>
+	<key>command</key>
+	<string>#!/usr/bin/env bash
+set -euo pipefail
+SUPPORT_DIR="${TM_BUNDLE_SUPPORT:-${TM_BUNDLE_PATH:-$HOME/Library/Application Support/TextMate/Bundles/Whisper Voice.tmbundle}/Support}"
+"$SUPPORT_DIR/bin/bootstrap.sh" set_postprocess_output_lang.sh</string>
+	<key>input</key>
+	<string>none</string>
+	<key>inputFormat</key>
+	<string>text</string>
+	<key>name</key>
+	<string>Whisper Voice - AI Output Language: Auto</string>
+	<key>outputCaret</key>
+	<string>afterOutput</string>
+	<key>outputFormat</key>
+	<string>text</string>
+	<key>outputLocation</key>
+	<string>toolTip</string>
+	<key>scope</key>
+	<string>text, source, markup</string>
+	<key>semanticClass</key>
+	<string>callback.document</string>
+	<key>uuid</key>
+	<string>5AF8DF5D-ABA4-4FB0-B07A-793854EB2992</string>
+	<key>version</key>
+	<integer>2</integer>
+</dict>
+</plist>

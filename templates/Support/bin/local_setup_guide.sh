@@ -56,11 +56,13 @@ TM_OAI_API_KEY=sk-...
 TM_OAI_MODEL=gpt-4o-mini
 TM_OAI_TIMEOUT_SEC=45
 TM_VOICE_POSTPROCESS=auto
+TM_VOICE_POST_OUTPUT_LANG=auto
 ```
 
 Notes:
 - `TM_VOICE_POSTPROCESS=auto`: only enable post-edit when API key is configured.
 - `TM_VOICE_POSTPROCESS=off`: disable post-edit.
+- `TM_VOICE_POST_OUTPUT_LANG`: `auto|en|zh|ja|ko` (`auto` keeps transcript language).
 - If API is unavailable, pipeline falls back to raw whisper transcript.
 
 ## 6) Reload TextMate bundles

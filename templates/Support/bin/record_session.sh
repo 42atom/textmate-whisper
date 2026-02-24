@@ -187,7 +187,7 @@ build_recording_marker() {
     shown_name="${shown_name:0:24}..."
   fi
 
-  printf '🔴 REC=%s |' "$shown_name"
+  printf '🔴 REC=%s ⌥+⌘+F1 to stop |' "$shown_name"
 }
 
 build_error_marker() {
@@ -476,12 +476,12 @@ EOF
   set_window_indicator "$recording_marker" "$window_id" "$window_title_base"
   blink_pid="$(start_recording_blink_loop "$ffmpeg_pid" "$recording_marker" "$window_id" "$window_title_base")"
   printf 'BLINK_PID=%s\n' "$blink_pid" >> "$STATE_FILE"
-  status_notify "Recording" "Started. Press Option+Command+F1 to stop."
+  status_notify "Recording" "Started."
   # Toggle command uses replaceInput output; emit selected text back so start action does not alter selection content.
   if [[ -n "${TM_SELECTED_TEXT:-}" ]]; then
     printf '%s' "$TM_SELECTED_TEXT"
   fi
-  show_tip_and_exit "Recording started. Press Option+Command+F1 to stop." 0
+  exit 0
 }
 
 stop_recording() {

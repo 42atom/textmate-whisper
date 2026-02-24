@@ -15,11 +15,12 @@
 ## 功能
 
 - 本地 Whisper-MLX 转写（命令：`mlx_whisper`）
-- 录音状态指示（窗口标题前缀 `🔴 REC=<设备名>` / `🪩 AI后处理...` + macOS 通知）
+- 录音状态指示（窗口标题前缀 `🔴 REC=<设备名> ⌥+⌘+F1 to stop` / `🪩 AI后处理...` + macOS 通知）
 - 五条命令 + 快捷键
   - `Voice Dictation - Toggle Recording`（`Option+Command+F1`，主快捷键）
   - `Voice Dictation - Stop Recording`（`Option+Command+F2`，可选兜底）
   - `Whisper Voice - Enable/Disable AI Post-Edit`（`Control+Option+Command+D`，菜单会随状态切换）
+  - `Whisper Voice - AI Output Language: <Auto|English|Chinese|Japanese|Korean>`（菜单命令，仅在启用 AI Post-Edit 时生效）
   - `Whisper Voice - Settings...`（菜单命令）
   - `Whisper Voice - Local Model Setup Guide`（菜单命令）
 - 可选 OpenAI 兼容后修饰
@@ -127,9 +128,11 @@ TM_OAI_MODEL=gpt-4o-mini
 TM_OAI_TIMEOUT_SEC=45
 
 TM_VOICE_POSTPROCESS=auto
+TM_VOICE_POST_OUTPUT_LANG=auto
 # off|none: 关闭后处理
 # auto: 仅当配置了 API key 时启用
 # openai: 强制走后处理（API 失败会回退原始转写）
+# 后处理输出语言：auto|en|zh|ja|ko
 
 TM_VOICE_POST_PROMPT=Polish this transcript into concise writing.
 TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and readability while preserving meaning. Return only the rewritten text.
@@ -137,13 +140,14 @@ TM_VOICE_POST_SYSTEM_PROMPT=You are a writing assistant. Improve punctuation and
 
 可通过 `TM_VOICE_POSTPROCESS=off` 强制关闭后处理。
 也可通过菜单命令 `Whisper Voice - Enable/Disable AI Post-Edit` 快速切换。
+后处理输出语言也可通过菜单命令 `Whisper Voice - AI Output Language: ...` 直接选择（仅在启用后处理时生效）。
 
 ### 开始/结束录音流程
 
 - 按 `Option+Command+F1` 开关录音（开始/结束）
 - 可选兜底：按 `Option+Command+F2` 强制结束并写入文本
 - 有选区时会替换选区，无选区时会在光标处插入
-- 当 `TM_VOICE_SHOW_STATUS=1` 时，录音/转写中会显示窗口标题前缀 `🔴 REC=<设备名>` / `🪩 AI后处理...`
+- 当 `TM_VOICE_SHOW_STATUS=1` 时，录音/转写中会显示窗口标题前缀 `🔴 REC=<设备名> ⌥+⌘+F1 to stop` / `🪩 AI后处理...`
 - 可通过 `TM_WHISPER_REC_BLINK_SEC`（秒，默认 `0.45`）调整录音标题闪烁速度
 
 ## 实现说明

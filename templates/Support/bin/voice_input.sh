@@ -48,6 +48,54 @@ trim_text_file() {
   printf '%s' "$content"
 }
 
+normalize_post_output_lang() {
+  local raw="${1:-auto}"
+  local value
+  value="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
+  value="$(printf '%s' "$value" | tr -d '[:space:]')"
+  case "$value" in
+    ""|auto|same|follow|input|source|original)
+      printf 'auto\n'
+      ;;
+    en|eng|english)
+      printf 'en\n'
+      ;;
+    zh|zhcn|zh_cn|zh-cn|cn|chinese|simplifiedchinese|simplified)
+      printf 'zh\n'
+      ;;
+    ja|jp|jpn|japanese)
+      printf 'ja\n'
+      ;;
+    ko|kr|kor|korean)
+      printf 'ko\n'
+      ;;
+    *)
+      printf 'invalid\n'
+      ;;
+  esac
+}
+
+post_output_lang_name() {
+  local normalized="${1:-auto}"
+  case "$normalized" in
+    en)
+      printf 'English\n'
+      ;;
+    zh)
+      printf 'Simplified Chinese\n'
+      ;;
+    ja)
+      printf 'Japanese\n'
+      ;;
+    ko)
+      printf 'Korean\n'
+      ;;
+    *)
+      printf 'Original transcript language\n'
+      ;;
+  esac
+}
+
 looks_like_ai_refusal_response() {
   local text="$1"
   local lower
@@ -152,6 +200,7 @@ postprocess_openai() {
   local api_key="${TM_OAI_API_KEY:-${OPENAI_API_KEY:-}}"
   local model="${TM_OAI_MODEL:-${OPENAI_MODEL:-gpt-4o-mini}}"
   local timeout_sec="${TM_OAI_TIMEOUT_SEC:-45}"
+  local post_lang_raw post_lang_normalized post_lang_name
 
   if [[ -z "$api_key" ]]; then
     cp "$in_file" "$out_file"
@@ -165,7 +214,16 @@ postprocess_openai() {
   TM_VOICE_USER_PROMPT="${TM_VOICE_USER_PROMPT:-}"
   TM_VOICE_POST_PROMPT="${TM_VOICE_POST_PROMPT:-}"
   TM_VOICE_POST_SYSTEM_PROMPT="${TM_VOICE_POST_SYSTEM_PROMPT:-}"
+  post_lang_raw="${TM_VOICE_POST_OUTPUT_LANG:-auto}"
+  post_lang_normalized="$(normalize_post_output_lang "$post_lang_raw")"
+  if [[ "$post_lang_normalized" == "invalid" ]]; then
+    append_log "WARN" "unknown TM_VOICE_POST_OUTPUT_LANG=${post_lang_raw}, fallback to auto"
+    post_lang_normalized="auto"
+  fi
+  post_lang_name="$(post_output_lang_name "$post_lang_normalized")"
   TM_OAI_MODEL="$model" \
+  TM_VOICE_POST_OUTPUT_LANG_NORM="$post_lang_normalized" \
+  TM_VOICE_POST_OUTPUT_LANG_NAME="$post_lang_name" \
   python3 - "$in_file" > "$payload_file" <<'PY'
 import json
 import os
@@ -174,13 +232,35 @@ import sys
 
 text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="ignore").strip()
 model = os.getenv("TM_OAI_MODEL", "gpt-4o-mini")
+lang_mode = os.getenv("TM_VOICE_POST_OUTPUT_LANG_NORM", "auto").strip().lower()
+lang_name = os.getenv("TM_VOICE_POST_OUTPUT_LANG_NAME", "Original transcript language").strip()
 system_prompt = os.getenv(
     "TM_VOICE_POST_SYSTEM_PROMPT",
     "You are a writing assistant. Improve punctuation and readability while preserving meaning. Return only the rewritten text.",
 ).strip()
 user_prompt = os.getenv("TM_VOICE_USER_PROMPT", "").strip() or os.getenv("TM_VOICE_POST_PROMPT", "").strip()
 if not user_prompt:
-    user_prompt = "Polish this transcript for written prose. Keep the original meaning and language."
+    if lang_mode == "auto":
+        user_prompt = "Polish this transcript for written prose. Keep the original meaning and language."
+    else:
+        user_prompt = (
+            f"Polish this transcript and output only {lang_name}. "
+            f"Preserve the original meaning. Translate when needed."
+        )
+else:
+    if lang_mode == "auto":
+        user_prompt = f"{user_prompt} Keep output in the same language as the transcript.".strip()
+    else:
+        user_prompt = (
+            f"{user_prompt} Required output language: {lang_name}. "
+            f"Translate to {lang_name} when needed and output only {lang_name}."
+        ).strip()
+
+if lang_mode != "auto":
+    system_prompt = (
+        f"{system_prompt} Strict requirement: final output must be entirely in {lang_name}. "
+        "Do not mix languages."
+    ).strip()
 
 payload = {
     "model": model,
@@ -250,6 +330,7 @@ load_config_env "${TM_WHISPER_CONFIG_FILE:-$HOME/.config/textmate-whisper/config
   TM_OAI_TIMEOUT_SEC \
   TM_VOICE_POST_PROMPT \
   TM_VOICE_POST_SYSTEM_PROMPT \
+  TM_VOICE_POST_OUTPUT_LANG \
   TM_WHISPER_LOG_DIR \
   TM_VOICE_SHOW_STATUS
 
